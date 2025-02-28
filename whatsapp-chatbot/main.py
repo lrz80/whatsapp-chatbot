@@ -2,7 +2,6 @@ import os
 from fastapi import FastAPI, Request, Form
 import openai
 import requests
-import uvicorn
 from twilio.twiml.messaging_response import MessagingResponse
 
 # Configura las API Keys
@@ -24,14 +23,12 @@ RESPUESTAS_PERSONALIZADAS = {
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(request: Request, Body: str = Form(...)):
+async def whatsapp_webhook(
+    request: Request,
+    Body: str = Form(None),
+    MediaUrl0: str = Form(None)  # Evita el error si no hay imagen
+):
     response = MessagingResponse()
-
-    # Obtener respuesta de GPT-4
-    respuesta_gpt = responder_chatgpt(Body)
-
-    # Enviar la respuesta a Twilio con TwiML
-    response.message(respuesta_gpt)
 
     # Si el usuario envía una imagen
     if MediaUrl0:
@@ -39,24 +36,13 @@ async def whatsapp_webhook(request: Request, Body: str = Form(...)):
         response.message(descripcion_imagen)
         return str(response)
 
-    # Si el usuario envía un mensaje de texto
+    # Si el usuario envía texto
     if Body:
-        mensaje = Body.lower().strip()
-
-        # Responder con mensajes predefinidos
-        if mensaje in RESPUESTAS_PERSONALIZADAS:
-            response.message(RESPUESTAS_PERSONALIZADAS[mensaje])
-            return str(response)
-
-        # Responder con ChatGPT
-        respuesta_gpt = responder_chatgpt(mensaje)
+        respuesta_gpt = responder_chatgpt(Body)
         response.message(respuesta_gpt)
         return str(response)
 
     return str(response)
-
-# Configurar la API Key
-openai.api_key = "tu_openai_api_key"
 
 def responder_chatgpt(mensaje):
     client = openai.Client()
@@ -64,6 +50,18 @@ def responder_chatgpt(mensaje):
         model="gpt-4",
         messages=[{"role": "user", "content": mensaje}]
     )
+    return respuesta.choices[0].message.content
+
+def analizar_imagen(url_imagen):
+    client = openai.Client()
+    respuesta = client.chat.completions.create(
+        model="gpt-4-vision-preview",
+        messages=[
+            {"role": "system", "content": "Describe la imagen en detalle."},
+            {"role": "user", "content": {"image": url_imagen}}
+        ]
+    )
+    
     return respuesta.choices[0].message.content
 
 # 🔵 Función para procesar imágenes con GPT-4 Vision
