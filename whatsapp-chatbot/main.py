@@ -54,13 +54,19 @@ async def whatsapp_webhook(
 
     return str(response)
 
-# 🟡 Función para generar respuestas con ChatGPT
+# Configura tu clave de API de OpenAI
+openai.api_key = "tu_openai_api_key"
+
 def responder_chatgpt(mensaje):
-    respuesta = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": mensaje}]
+    # Haciendo una solicitud a la API para obtener la respuesta
+    respuesta = openai.Completion.create(
+        model="gpt-4",  # o usa gpt-3.5 si prefieres una versión más rápida
+        prompt=mensaje,
+        max_tokens=150,  # Ajusta según sea necesario
+        temperature=0.7  # Controla la creatividad de las respuestas
     )
-    return respuesta["choices"][0]["message"]["content"]
+    
+    return respuesta.choices[0].text.strip()  # La respuesta generada
 
 # 🔵 Función para procesar imágenes con GPT-4 Vision
 def analizar_imagen(url_imagen):
