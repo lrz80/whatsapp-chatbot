@@ -61,7 +61,7 @@ def analizar_imagen(url_imagen):
             {"role": "user", "content": {"image": url_imagen}}
         ]
     )
-    
+
     return respuesta.choices[0].message.content
 
 # 🔵 Función para procesar imágenes con GPT-4 Vision
@@ -87,7 +87,7 @@ async def transcribir_audio(url_audio: str):
     
     return {"texto_transcrito": transcript["text"]}
 
-# Leer el puerto asignado por Railway
+# Obtener el puerto desde las variables de entorno de Railway
 PORT = int(os.environ.get("PORT", 8000))
 
 if __name__ == "__main__":
