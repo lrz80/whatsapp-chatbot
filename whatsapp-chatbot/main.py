@@ -1,3 +1,4 @@
+import uvicorn
 import os
 from fastapi import FastAPI, Request, Form
 import openai
