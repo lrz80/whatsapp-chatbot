@@ -24,13 +24,14 @@ RESPUESTAS_PERSONALIZADAS = {
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(
-    request: Request,
-    Body: str = Form(None),
-    MediaUrl0: str = Form(None),
-    From: str = Form(None)
-):
+async def whatsapp_webhook(request: Request, Body: str = Form(...)):
     response = MessagingResponse()
+
+    # Obtener respuesta de GPT-4
+    respuesta_gpt = responder_chatgpt(Body)
+
+    # Enviar la respuesta a Twilio con TwiML
+    response.message(respuesta_gpt)
 
     # Si el usuario envía una imagen
     if MediaUrl0:
@@ -58,7 +59,7 @@ async def whatsapp_webhook(
 openai.api_key = "tu_openai_api_key"
 
 def responder_chatgpt(mensaje):
-    client = openai.Client()  # Se debe usar un cliente en OpenAI 1.64.0
+    client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": mensaje}]
