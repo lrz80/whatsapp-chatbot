@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Form
 import openai
 import requests
+import uvicorn
 from twilio.twiml.messaging_response import MessagingResponse
 
 # Configura las API Keys
@@ -83,5 +84,8 @@ async def transcribir_audio(url_audio: str):
     
     return {"texto_transcrito": transcript["text"]}
 
-# Ejecutar en Railway con:
-# uvicorn main:app --host 0.0.0.0 --port 8000
+# Leer el puerto asignado por Railway
+PORT = int(os.environ.get("PORT", 8000))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
