@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, Form
 import openai
 import requests
 from twilio.twiml.messaging_response import MessagingResponse
+from fastapi.responses import Response
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -13,6 +14,7 @@ TWILIO_SID = "tu_twilio_sid"
 
 # Inicializa FastAPI
 app = FastAPI()
+
 openai.api_key = OPENAI_API_KEY
 
 # Respuestas predefinidas
@@ -41,9 +43,8 @@ async def whatsapp_webhook(
     if Body:
         respuesta_gpt = responder_chatgpt(Body)
         response.message(respuesta_gpt)
-        return str(response)
 
-    return str(response)
+    return Response(content=str(response), media_type="text/xml")
 
 def responder_chatgpt(mensaje):
     client = openai.Client()
