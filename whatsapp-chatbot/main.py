@@ -57,7 +57,7 @@ def responder_chatgpt(mensaje):
     respuesta = client.chat.completions.create(
         model="gpt-4",
         temperature=0.3,  # Más bajo = respuestas más precisas y menos creativas
-        max_tokens=200
+        max_tokens=200,
         messages = [
     {"role": "system", "content": "Eres un asistente de WhatsApp que ayuda a responder preguntas sobre Spinzone y sus productos."},
     {"role": "user", "content": mensaje}
