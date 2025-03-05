@@ -5,6 +5,8 @@ import openai
 import requests
 from twilio.twiml.messaging_response import MessagingResponse
 from fastapi.responses import Response
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -14,6 +16,9 @@ TWILIO_SID = "tu_twilio_sid"
 
 # Inicializa FastAPI
 app = FastAPI()
+
+class Message(BaseModel):
+    body: str
 
 openai.api_key = OPENAI_API_KEY
 
