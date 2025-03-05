@@ -56,7 +56,11 @@ def responder_chatgpt(mensaje):
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": mensaje}]
+        messages = [
+    {"role": "system", "content": "Eres un asistente de WhatsApp que ayuda a responder preguntas sobre Spinzone y sus productos."},
+    {"role": "user", "content": mensaje}
+]
+
     )
 
     print(respuesta)
