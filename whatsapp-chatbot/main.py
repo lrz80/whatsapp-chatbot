@@ -7,6 +7,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from fastapi.responses import Response
 from fastapi import FastAPI
 from pydantic import BaseModel
+import json
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -57,7 +58,10 @@ def responder_chatgpt(mensaje):
         model="gpt-4",
         messages=[{"role": "user", "content": mensaje}]
     )
-    return respuesta.choices[0].message.content
+
+    contenido = respuesta["choices"][0]["message"]["content"]
+
+    return contenido.encode("utf-8").decode("utf-8")
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
