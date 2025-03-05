@@ -61,8 +61,7 @@ def responder_chatgpt(mensaje):
 
     print(respuesta)
 
-    contenido = respuesta.choices[0].message["content"]
-
+    contenido = respuesta.choices[0].message.content
 
     return contenido.encode("utf-8").decode("utf-8")
 
