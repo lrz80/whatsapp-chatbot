@@ -8,7 +8,6 @@ from fastapi.responses import Response
 from fastapi import FastAPI
 from pydantic import BaseModel
 import json
-from fastapi.responses import JSONResponse
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -23,6 +22,13 @@ class Message(BaseModel):
     body: str
 
 openai.api_key = OPENAI_API_KEY
+
+# Respuestas predefinidas
+RESPUESTAS_PERSONALIZADAS = {
+    "horario": "Nuestro horario de atención es de 9 AM a 6 PM.",
+    "precio": "Los precios varían según el producto. ¿Cuál te interesa?",
+    "contacto": "Puedes llamarnos al +123456789."
+}
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
@@ -47,12 +53,12 @@ async def whatsapp_webhook(
     return Response(content=str(response), media_type="text/xml")
 
 def responder_chatgpt(mensaje):
-    print(f"Mensaje recibido: {mensaje}")  # Ver qué está recibiendo antes de enviar
+    print(f"message received: {message}")  # Ver qué está recibiendo antes de enviar
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        temperature=0.4,  # Más bajo = respuestas más precisas y menos creativas
-        max_tokens=1000,
+        temperature=0.5,  # Más bajo = respuestas más precisas y menos creativas
+        max_tokens=500,
         messages = [
             {
                 "role": "system", "content": "Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales. Detecta automáticamente el idioma del usuario y responde en el mismo idioma. Si el usuario especifica un idioma en su mensaje, traduce tu respuesta a ese idioma. Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional.\n"
@@ -99,17 +105,16 @@ def responder_chatgpt(mensaje):
 
                 "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. El usuario puede usar palabras combinadas como hola quiero mas informacion o me das mas informacion, Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
             },
-                {"role": "user", "content": mensaje},
-                {"role": "user", "content": "Hola"},
-                {"role": "assistant", "content": "¡Hola! ¿En qué puedo ayudarte?"},
-                {"role": "user", "content": "Quiero más información"}
+                {"role": "user", "content": mensaje}
         ]
 
     )
 
-    respuesta_gpt = obtener_respuesta_gpt(mensaje)
-    print(f"Respuesta de OpenAI: {respuesta_gpt}")  # Debug
-    return JSONResponse(content={"message": respuesta_gpt})
+    print(respuesta)
+
+    contenido = respuesta.choices[0].message.content
+
+    return contenido.encode("utf-8").decode("utf-8")
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
