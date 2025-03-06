@@ -30,6 +30,10 @@ RESPUESTAS_PERSONALIZADAS = {
     "contacto": "Puedes llamarnos al +123456789."
 }
 
+def dividir_mensaje(mensaje, limite=1600):
+    """Divide un mensaje en fragmentos de máximo 'limite' caracteres."""
+    return [mensaje[i:i+limite] for i in range(0, len(mensaje), limite)]
+
 mensajes_divididos = dividir_mensaje(respuesta_gpt)
 
 for mensaje in mensajes_divididos:
