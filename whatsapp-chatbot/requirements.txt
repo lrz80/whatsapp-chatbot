@@ -4,3 +4,6 @@ uvicorn
 twilio
 requests
 python-multipart
+fuzzywuzzy
+python-Levenshtein
+
