@@ -53,7 +53,7 @@ async def whatsapp_webhook(
     return Response(content=str(response), media_type="text/xml")
 
 def responder_chatgpt(mensaje):
-    print(f"message received: {message}")  # Ver qué está recibiendo antes de enviar
+    print(f"message received: {mensaje}")  # Ver qué está recibiendo antes de enviar
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
