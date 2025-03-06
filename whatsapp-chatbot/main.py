@@ -34,24 +34,17 @@ openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-def whatsapp_webhook(request):
-    client = Client("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
+async def whatsapp_webhook(request: Request):
+    body = await request.body()
+    print("🔍 Raw request body:", body)
+    try:
+        data = await request.json()
+        print("📩 JSON recibido:", data)
+        return {"status": "ok"}
+    except Exception as e:
+        print("❌ Error procesando JSON:", e)
+        return {"error": "Invalid JSON"}
 
-    # Obtener el mensaje del usuario
-    data = request.json()
-    mensaje_usuario = data['Body']
-    numero_usuario = data['From']
-
-    respuestas = responder_chatgpt(mensaje_usuario)  # Obtiene lista de mensajes divididos
-
-    for respuesta in respuestas:  # Enviar cada parte por separado
-        client.messages.create(
-            from_='whatsapp:+18632708728',  # Número de Twilio
-            to=numero_usuario,
-            body=respuesta
-        )
-
-    return {"status": "mensaje enviado"}
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
