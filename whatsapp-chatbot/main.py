@@ -38,18 +38,22 @@ openai.api_key = OPENAI_API_KEY
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        raw_data = await request.body()  # Leer el cuerpo en bruto
-        print(f"Raw Request Data: {raw_data.decode('utf-8')}")  # Imprimir el contenido crudo
+        form_data = await request.form()  # Leer los datos correctamente
+        print(f"Datos recibidos: {form_data}")  # Log para depuración
 
-        data = await request.json()  # Intentar parsear a JSON
-        print(f"Datos recibidos: {data}")  # Log para depuración
+        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje enviado por el usuario
+        numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
 
-        response_data = {"message": "Recibido correctamente"}
-        return JSONResponse(content=response_data, media_type="application/json")
+        if not mensaje:
+            return JSONResponse(content={"error": "Mensaje vacío"}, status_code=400)
+
+        print(f"Mensaje recibido: {mensaje} de {numero}")
+
+        return JSONResponse(content={"message": "Recibido correctamente"}, status_code=200)
 
     except Exception as e:
-        print(f"Error procesando JSON: {e}")  # Log del error
-        return JSONResponse(content={"error": "Invalid JSON"}, media_type="application/json", status_code=400)
+        print(f"Error procesando datos: {e}")  # Log del error
+        return JSONResponse(content={"error": "Error procesando la solicitud"}, status_code=400)
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
