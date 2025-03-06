@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from fastapi import FastAPI
 from pydantic import BaseModel
 import json
+from fastapi import FastAPI, Request
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -25,25 +26,10 @@ openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(
-    request: Request,
-    Body: str = Form(None),
-    MediaUrl0: str = Form(None)  # Evita el error si no hay imagen
-):
-    response = MessagingResponse()
-
-    # Si el usuario envía una imagen
-    if MediaUrl0:
-        descripcion_imagen = analizar_imagen(MediaUrl0)
-        response.message(descripcion_imagen)
-        return str(response)
-
-    # Si el usuario envía texto
-    if Body:
-        respuesta_gpt = responder_chatgpt(Body)
-        response.message(respuesta_gpt)
-
-    return Response(content=str(response), media_type="text/xml")
+async def whatsapp_webhook(request: Request):
+    data = await request.json()
+    print("Mensaje recibido:", data)  # Verifica la estructura del JSON en los logs
+    return {"status": "received"}
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Ver qué está recibiendo antes de enviar
