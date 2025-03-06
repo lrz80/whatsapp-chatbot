@@ -106,6 +106,9 @@ def responder_chatgpt(mensaje):
                 "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. El usuario puede usar palabras combinadas como hola quiero mas informacion o me das mas informacion, Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
             },
                 {"role": "user", "content": mensaje}
+                {"role": "system", "content": "Eres un asistente virtual para Spinzone Indoor Cycling. Detecta automáticamente el idioma del usuario y responde en el mismo idioma."},
+                {"role": "user", "content": "Hello, I need more information"},
+                {"role": "assistant", "content": "Hello! How can I help you?"},
         ]
 
     )
