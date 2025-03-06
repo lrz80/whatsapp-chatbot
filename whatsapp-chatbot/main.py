@@ -25,27 +25,25 @@ openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(request: Request):
-    data = await request.json()
-    from_number = data["From"]
-    body = data["Body"]
+async def whatsapp_webhook(
+    request: Request,
+    Body: str = Form(None),
+    MediaUrl0: str = Form(None)  # Evita el error si no hay imagen
+):
+    response = MessagingResponse()
 
-    print(f"Mensaje recibido: {body}")  # Para depuración
-    respuesta = responder_chatgpt(body)
-    
-    print(f"Respuesta generada: {respuesta}")  # Para ver qué genera GPT
-    
-    if respuesta:  # Asegurar que hay una respuesta antes de enviar
-        client.messages.create(
-            from_="whatsapp:+18632708728",  # Tu número Twilio
-            body=respuesta,
-            to=from_number
-        )
-    else:
-        print("Error: No se generó respuesta.")
+    # Si el usuario envía una imagen
+    if MediaUrl0:
+        descripcion_imagen = analizar_imagen(MediaUrl0)
+        response.message(descripcion_imagen)
+        return str(response)
 
-    return {"status": "ok"}
+    # Si el usuario envía texto
+    if Body:
+        respuesta_gpt = responder_chatgpt(Body)
+        response.message(respuesta_gpt)
 
+    return Response(content=str(response), media_type="text/xml")
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Ver qué está recibiendo antes de enviar
@@ -108,13 +106,9 @@ def responder_chatgpt(mensaje):
 
     print(respuesta)
 
-    respuesta_gpt = respuesta.choices[0].message.content.strip()
+    contenido = respuesta.choices[0].message.content
 
-    # Si la respuesta es vacía, proporcionar un mensaje alternativo
-    if not respuesta_gpt:
-        respuesta_gpt = "Lo siento, no encontré información relevante. ¿Puedes preguntar de otra manera?"
-
-    return respuesta_gpt
+    return contenido.encode("utf-8").decode("utf-8")
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
