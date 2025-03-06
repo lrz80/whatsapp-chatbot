@@ -30,6 +30,15 @@ RESPUESTAS_PERSONALIZADAS = {
     "contacto": "Puedes llamarnos al +123456789."
 }
 
+mensajes_divididos = dividir_mensaje(respuesta_gpt)
+
+for mensaje in mensajes_divididos:
+    client.messages.create(
+        from_="whatsapp:+18632708728",  # Reemplaza con el número de Twilio Sandbox o el oficial
+        body=mensaje,
+        to=from_number  # El número del usuario que envió el mensaje
+    )
+
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
 async def whatsapp_webhook(
