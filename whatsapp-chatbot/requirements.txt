@@ -6,4 +6,6 @@ requests
 python-multipart
 fuzzywuzzy
 python-Levenshtein
+echo "fuzzywuzzy" >> requirements.txt
+echo "python-Levenshtein" >> requirements.txt
 
