@@ -38,7 +38,10 @@ openai.api_key = OPENAI_API_KEY
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        data = await request.json()  # Leer el JSON enviado por Twilio
+        raw_data = await request.body()  # Leer el cuerpo en bruto
+        print(f"Raw Request Data: {raw_data.decode('utf-8')}")  # Imprimir el contenido crudo
+
+        data = await request.json()  # Intentar parsear a JSON
         print(f"Datos recibidos: {data}")  # Log para depuración
 
         response_data = {"message": "Recibido correctamente"}
