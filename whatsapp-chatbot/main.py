@@ -102,7 +102,7 @@ def responder_chatgpt(mensaje):
                 "📩 **Contacto**:\n"
                 "Si necesitas más información o quieres hablar con un asesor, puedes llamar o escribir al WhatsApp (863)317-1646.\n"
 
-                "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
+                "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. El usuario puede usar palabras combinadas como hola quiero mas informacion o me das mas informacion, Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
             },
                 {"role": "user", "content": mensaje}
         ]
