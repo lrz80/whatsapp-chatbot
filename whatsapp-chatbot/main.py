@@ -101,12 +101,12 @@ def responder_chatgpt(mensaje):
                 {"role": "user", "content": mensaje},
                 {"role": "user", "content": "Hola"},
                 {"role": "assistant", "content": "¡Hola! ¿En qué puedo ayudarte?"},
-                {"role": "user", "content": "Quiero más información"},
+                {"role": "user", "content": "Quiero más información"}
         ]
 
     )
 
-    print(respuesta)
+    print(f"Respuesta de OpenAI: {respuesta}")  # Ver qué responde OpenAI
 
     contenido = respuesta.choices[0].message.content
 
