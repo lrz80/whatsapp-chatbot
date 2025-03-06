@@ -23,13 +23,6 @@ class Message(BaseModel):
 
 openai.api_key = OPENAI_API_KEY
 
-# Respuestas predefinidas
-RESPUESTAS_PERSONALIZADAS = {
-    "horario": "Nuestro horario de atención es de 9 AM a 6 PM.",
-    "precio": "Los precios varían según el producto. ¿Cuál te interesa?",
-    "contacto": "Puedes llamarnos al +123456789."
-}
-
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
 async def whatsapp_webhook(
@@ -57,7 +50,7 @@ def responder_chatgpt(mensaje):
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        temperature=0.3,  # Más bajo = respuestas más precisas y menos creativas
+        temperature=0.4,  # Más bajo = respuestas más precisas y menos creativas
         max_tokens=1000,
         messages = [
             {
