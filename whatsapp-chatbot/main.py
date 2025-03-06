@@ -30,19 +30,6 @@ RESPUESTAS_PERSONALIZADAS = {
     "contacto": "Puedes llamarnos al +123456789."
 }
 
-def dividir_mensaje(mensaje, limite=1600):
-    """Divide un mensaje en fragmentos de máximo 'limite' caracteres."""
-    return [mensaje[i:i+limite] for i in range(0, len(mensaje), limite)]
-
-mensajes_divididos = dividir_mensaje(respuesta_gpt)
-
-for mensaje in mensajes_divididos:
-    client.messages.create(
-        from_="whatsapp:+18632708728",  # Reemplaza con el número de Twilio Sandbox o el oficial
-        body=mensaje,
-        to=from_number  # El número del usuario que envió el mensaje
-    )
-
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
 async def whatsapp_webhook(
@@ -74,7 +61,7 @@ def responder_chatgpt(mensaje):
         max_tokens=500,
         messages = [
             {
-                "role": "system", "content": "Eres un asistente virtual, experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales. Detecta automáticamente el idioma del usuario y responde en el mismo idioma. Si el usuario especifica un idioma en su mensaje, traduce tu respuesta a ese idioma. Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional.\n"
+                "role": "system", "content": "Eres un asistente virtual, experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional.\n"
                 "🚴‍♂️Indoor Cycling: Clases de 45 minutos con música motivadora, entrenamiento de resistencia y alta intensidad para mejorar tu condición física, quemar calorías y fortalecer piernas y glúteos.\n"
                 "🏋️‍♂️Clases Funcionales: Entrenamientos dinámicos que combinan fuerza, cardio y resistencia, diseñados para tonificar el cuerpo y mejorar tu rendimiento físico.\n\n"
 
@@ -119,9 +106,7 @@ def responder_chatgpt(mensaje):
                 "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. El usuario puede usar palabras combinadas como hola quiero mas informacion o me das mas informacion, Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
             },
                 {"role": "user", "content": mensaje},
-                {"role": "system", "content": "Eres un asistente virtual para Spinzone Indoor Cycling. Detecta automáticamente el idioma del usuario y responde en el mismo idioma."},
-                {"role": "user", "content": "Hello, I need more information"},
-                {"role": "assistant", "content": "Hello! How can I help you?"},
+                
         ]
 
     )
