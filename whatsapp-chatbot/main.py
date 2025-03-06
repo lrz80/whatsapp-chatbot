@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from fastapi import FastAPI
 from pydantic import BaseModel
 import json
+from fastapi.responses import JSONResponse
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -106,11 +107,9 @@ def responder_chatgpt(mensaje):
 
     )
 
-    print(f"Respuesta de OpenAI: {respuesta}")  # Ver qué responde OpenAI
-
-    contenido = respuesta.choices[0].message.content
-
-    return contenido.encode("utf-8").decode("utf-8")
+    respuesta_gpt = obtener_respuesta_gpt(mensaje)
+    print(f"Respuesta de OpenAI: {respuesta_gpt}")  # Debug
+    return JSONResponse(content={"message": respuesta_gpt})
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
