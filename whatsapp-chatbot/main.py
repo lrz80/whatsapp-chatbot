@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import json
 from fastapi import FastAPI, Request
-from fuzzywuzzy import process
+from thefuzz import process
 from twilio.rest import Client
 
 def es_similar(frase_usuario, opciones, umbral=70):
