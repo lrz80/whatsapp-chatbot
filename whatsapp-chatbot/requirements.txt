@@ -4,8 +4,6 @@ uvicorn
 twilio
 requests
 python-multipart
-fuzzywuzzy
+thefuzz
 python-Levenshtein
-echo "fuzzywuzzy" >> requirements.txt
-echo "python-Levenshtein" >> requirements.txt
 
