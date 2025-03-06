@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from thefuzz import process
 from twilio.rest import Client
 from fastapi import FastAPI, Form
+from fastapi.responses import JSONResponse
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -35,9 +36,17 @@ openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(Body: str = Form(...)):
-    print(f"📩 Mensaje recibido: {Body}")
-    return {"status": "ok"}
+async def whatsapp_webhook(request: Request):
+    try:
+        data = await request.json()  # Leer el JSON enviado por Twilio
+        print(f"Datos recibidos: {data}")  # Log para depuración
+
+        response_data = {"message": "Recibido correctamente"}
+        return JSONResponse(content=response_data, media_type="application/json")
+
+    except Exception as e:
+        print(f"Error procesando JSON: {e}")  # Log del error
+        return JSONResponse(content={"error": "Invalid JSON"}, media_type="application/json", status_code=400)
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
