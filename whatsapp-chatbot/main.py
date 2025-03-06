@@ -56,8 +56,8 @@ def responder_chatgpt(mensaje):
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        temperature=0.4,  # Más bajo = respuestas más precisas y menos creativas
-        max_tokens=500,
+        temperature=0.5,  # Más bajo = respuestas más precisas y menos creativas
+        max_tokens=1000,
         messages = [
             {
                 "role": "system", "content": "Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales. Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional.\n"
