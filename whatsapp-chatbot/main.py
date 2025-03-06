@@ -9,6 +9,14 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import json
 from fastapi import FastAPI, Request
+from fuzzywuzzy import process
+from twilio.rest import Client
+
+def es_similar(frase_usuario, opciones, umbral=70):
+    """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
+    mejor_coincidencia, score = process.extractOne(frase_usuario, opciones)
+    return mejor_coincidencia if score >= umbral else None
+
 
 # Configura las API Keys
 OPENAI_API_KEY = "tu_openai_api_key"
@@ -26,37 +34,53 @@ openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
-async def whatsapp_webhook(
-    request: Request,
-    Body: str = Form(None),
-    MediaUrl0: str = Form(None)  # Evita el error si no hay imagen
-):
-    response = MessagingResponse()
+def whatsapp_webhook(request):
+    client = Client("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
 
-    # Si el usuario envía una imagen
-    if MediaUrl0:
-        descripcion_imagen = analizar_imagen(MediaUrl0)
-        response.message(descripcion_imagen)
-        return str(response)
+    # Obtener el mensaje del usuario
+    data = request.json()
+    mensaje_usuario = data['Body']
+    numero_usuario = data['From']
 
-    # Si el usuario envía texto
-    if Body:
-        respuesta_gpt = responder_chatgpt(Body)
-        response.message(respuesta_gpt)
+    respuestas = responder_chatgpt(mensaje_usuario)  # Obtiene lista de mensajes divididos
 
-    return Response(content=str(response), media_type="text/xml")
+    for respuesta in respuestas:  # Enviar cada parte por separado
+        client.messages.create(
+            from_='whatsapp:+18632708728',  # Número de Twilio
+            to=numero_usuario,
+            body=respuesta
+        )
+
+    return {"status": "mensaje enviado"}
 
 def responder_chatgpt(mensaje):
-    print(f"Mensaje recibido: {mensaje}")  # Ver qué está recibiendo antes de enviar
+    print(f"Mensaje recibido: {mensaje}")  # Depuración
+
     client = openai.Client()
+    
+    # Palabras clave detectadas con fuzzy matching
+    opciones_horario = ["horario", "horarios", "qué horario tienen?", "dime los horarios"]
+    opciones_precios = ["precios", "cuánto cuesta", "planes", "tarifas", "costos"]
+    opciones_info = ["información", "quiero información", "dame más información", "cuéntame sobre spinzone"]
+    
+    mensaje_clave = None
+    
+    if es_similar(mensaje.lower(), opciones_horario):
+        mensaje_clave = "Dime los horarios de Spinzone Indoor Cycling."
+    elif es_similar(mensaje.lower(), opciones_precios):
+        mensaje_clave = "Dime los precios de Spinzone Indoor Cycling."
+    elif es_similar(mensaje.lower(), opciones_info):
+        mensaje_clave = "Dame información general sobre Spinzone Indoor Cycling."
+    else:
+        mensaje_clave = mensaje  # Si no hay coincidencias, usa el mensaje original
+    
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        temperature=0.4,  # Más bajo = respuestas más precisas y menos creativas
+        temperature=0.4,
         max_tokens=1500,
-        messages = [
+        messages=[
             {
-                "role": "system", "content": "Eres un asistente virtual experto, en Spinzone Indoor Cycling, un estudio especializado en clases de ciclismo indoor y Clases Funcionales. Cuando te pregunten por informacion, enviales los mensajes hasta 1600 caracteres. Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.\n\n"
-
+                "role": "system", "content": "Eres un asistente virtual, experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación y enlaces a sus páginas web y redes sociales. Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.\n"
                 "🚴‍♂️Indoor Cycling: Clases de 45 minutos con música motivadora, entrenamiento de resistencia y alta intensidad para mejorar tu condición física, quemar calorías y fortalecer piernas y glúteos.\n"
                 "🏋️‍♂️Clases Funcionales: Entrenamientos dinámicos que combinan fuerza, cardio y resistencia, diseñados para tonificar el cuerpo y mejorar tu rendimiento físico.\n\n"
 
@@ -100,18 +124,27 @@ def responder_chatgpt(mensaje):
 
                 "Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. El usuario puede usar palabras combinadas como hola quiero mas informacion o me das mas informacion, Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto o a la página web.\n"
             },
-                {"role": "user", "content": mensaje},
-                {"role": "assistant", "content": "Hello! How can I help you?"},
-                
+                {"role": "system", "content": prompt_negocio},
+                {"role": "user", "content": mensaje_clave}
         ]
-
     )
 
-    print(respuesta)
+    texto_respuesta = respuesta.choices[0].message.content.strip()
 
-    contenido = respuesta.choices[0].message.content
+    return dividir_mensaje(texto_respuesta)  # Separa en partes si es necesario
 
-    return contenido.encode("utf-8").decode("utf-8")
+def dividir_mensaje(mensaje, limite=1500):
+    """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
+    partes = []
+    while len(mensaje) > limite:
+        corte = mensaje.rfind("\n", 0, limite)  # Busca un salto de línea antes del límite
+        if corte == -1:  # Si no hay salto de línea, corta en el límite exacto
+            corte = limite
+        partes.append(mensaje[:corte])
+        mensaje = mensaje[corte:].strip()
+    partes.append(mensaje)  # Agrega la última parte
+    return partes
+
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
