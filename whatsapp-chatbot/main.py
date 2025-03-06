@@ -50,7 +50,7 @@ def responder_chatgpt(mensaje):
     client = openai.Client()
     respuesta = client.chat.completions.create(
         model="gpt-4",
-        temperature=0.5,  # Más bajo = respuestas más precisas y menos creativas
+        temperature=0.7,  # Más bajo = respuestas más precisas y menos creativas
         max_tokens=500,
         messages = [
             {
