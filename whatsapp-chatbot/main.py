@@ -24,7 +24,9 @@ def es_similar(frase_usuario, opciones, umbral=70):
 
 def detectar_idioma(mensaje):
     try:
-        return detect(mensaje)
+        idioma = detect(mensaje)
+        print(f"🔍 Idioma detectado: {idioma}")  # 🔴 Agregamos este log
+        return idioma
     except:
         return "es"  # Si hay error, usa español por defecto
 
@@ -182,7 +184,12 @@ def responder_chatgpt(mensaje):
     If the user asks a question outside of these topics, try to redirect them to the WhatsApp contact.
     """
     # Escoger el prompt según el idioma detectado
-    prompt_negocio = prompt_negocio_en if idioma_usuario == "en" else prompt_negocio_es
+    if idioma_usuario == "en":
+        prompt_negocio = prompt_negocio_en
+    else:
+        prompt_negocio = prompt_negocio_es
+
+    print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  # 🔴 Verificamos el prompt usado
 
     # 🔹 Definir palabras clave con fuzzy matching
     opciones_horario = ["horario", "horarios", "qué horario tienen?", "dime los horarios"]
@@ -212,7 +219,8 @@ def responder_chatgpt(mensaje):
 
     # Obtener la respuesta del asistente
     mensaje_respuesta = respuesta.choices[0].message.content
-
+    print(f"💬 Respuesta generada: {mensaje_respuesta}")  # 🔴 Depuración
+    
     return mensaje_respuesta
 
 
