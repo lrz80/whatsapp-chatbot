@@ -43,10 +43,10 @@ class Message(BaseModel):
 async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()  # Leer los datos correctamente
-        print(f"Datos recibidos: {form_data}")  # Log para depuración
-
         mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje enviado por el usuario
         numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
+
+        print(f"Datos recibidos: {form_data}")  # Log para depuración
 
         if not mensaje:
             return JSONResponse(content={"error": "Mensaje vacío"}, status_code=400)
@@ -123,7 +123,8 @@ def responder_chatgpt(mensaje):
     opciones_info = ["información", "quiero información", "dame más información", "cuéntame sobre spinzone"]
 
     mensaje_clave = mensaje  # 🔹 Asegurar que siempre tenga un valor
-
+    numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
+    
     if es_similar(mensaje.lower(), opciones_horario):
         mensaje_clave = "Dime los horarios de Spinzone Indoor Cycling."
     elif es_similar(mensaje.lower(), opciones_precios):
