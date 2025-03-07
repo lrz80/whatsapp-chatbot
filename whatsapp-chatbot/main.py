@@ -72,6 +72,8 @@ async def whatsapp_webhook(request: Request):
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
 
+    client = openai.Client()
+    
     # Detectar idioma del usuario
     idioma_usuario = detectar_idioma(mensaje)
     print(f"Idioma detectado: {idioma_usuario}")  # Depuración
