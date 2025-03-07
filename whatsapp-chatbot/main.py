@@ -144,10 +144,15 @@ def responder_chatgpt(mensaje):
         ]
     )
 
-    texto_respuesta = respuesta.choices[0].message.content.strip()
-    print(f"Respuesta completa de OpenAI: {respuesta}")  # 👈 Verificar si hay respuesta o si hay un error
+    # 🛠 Solución rápida: asegurar que la respuesta sea un string antes de enviarla
+    respuesta_generada = respuesta.choices[0].message.content
+    
+    if isinstance(respuesta_generada, list):  # Si es lista, conviértela en string
+        respuesta_generada = "\n".join(respuesta_generada)
 
-    return dividir_mensaje(texto_respuesta)  # Divide mensajes largos si es necesario
+    print(f"Respuesta generada: {respuesta_generada}")  # Debugging
+    
+    return respuesta_generada  # Retornamos la respuesta ya corregida
 
 def dividir_mensaje(mensaje, limite=1300):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
