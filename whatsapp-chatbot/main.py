@@ -50,6 +50,9 @@ async def whatsapp_webhook(request: Request):
 
         print(f"Mensaje recibido: {mensaje} de {numero}")
 
+        respuesta = responder_chatgpt(mensaje)
+        print(f"Respuesta generada: {respuesta}")
+
         return PlainTextResponse("Recibido correctamente", status_code=200)
 
     except Exception as e:
@@ -76,7 +79,7 @@ def responder_chatgpt(mensaje):
         mensaje_clave = "Dame información general sobre Spinzone Indoor Cycling."
     else:
         mensaje_clave = mensaje  # Si no hay coincidencias, usa el mensaje original
-    
+
     respuesta = client.chat.completions.create(
         model="gpt-4",
         temperature=0.4,
