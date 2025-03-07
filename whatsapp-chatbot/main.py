@@ -74,8 +74,9 @@ def responder_chatgpt(mensaje):
 
     client = openai.Client()
 
-    idioma = detectar_idioma(mensaje)  # Detectar idioma
-    print(f"Idioma detectado: {idioma}")  # Depuración
+    idioma_usuario = detectar_idioma(mensaje)  # Detectar idioma correctamente
+    print(f"Idioma detectado: {idioma_usuario}")  # Depuración
+
 
     prompt_negocio = "Información general sobre Spinzone Indoor Cycling."
 
