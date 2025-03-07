@@ -15,6 +15,7 @@ from fastapi import FastAPI, Form
 from fastapi.responses import JSONResponse
 from starlette.responses import PlainTextResponse
 from fastapi.responses import PlainTextResponse
+from langdetect import detect
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -67,6 +68,15 @@ def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
 
     client = openai.Client()
+
+    try:
+        idioma_usuario = detect(mensaje)  # Detectamos el idioma del mensaje del usuario
+        print(f"Idioma detectado: {idioma_usuario}")  # Debugging
+    except:
+        idioma_usuario = "es"  # Si no se puede detectar, asumir español
+
+    # 🔥 Modificamos el prompt para forzar respuesta en el mismo idioma
+    prompt_modificado = f"{prompt_negocio}\n\nResponde en el idioma del usuario detectado ({idioma_usuario})."
 
     # 🔹 Definir el prompt del negocio
     prompt_negocio = """
