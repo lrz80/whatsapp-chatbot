@@ -73,7 +73,7 @@ def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
 
     client = openai.Client()
-    
+
     # Detectar idioma del usuario
     idioma_usuario = detectar_idioma(mensaje)
     print(f"Idioma detectado: {idioma_usuario}")  # Depuración
@@ -210,15 +210,11 @@ def responder_chatgpt(mensaje):
         ]
     )
 
-    # 🛠 Solución rápida: asegurar que la respuesta sea un string antes de enviarla
-    respuesta_generada = respuesta.choices[0].message.content
-    
-    if isinstance(respuesta_generada, list):  # Si es lista, conviértela en string
-        respuesta_generada = "\n".join(respuesta_generada)
+    # Obtener la respuesta del asistente
+    mensaje_respuesta = respuesta.choices[0].message.content
 
-    print(f"Respuesta generada: {respuesta_generada}")  # Debugging
-    
-    return respuesta["choices"][0]["message"]["content"]
+    return mensaje_respuesta
+
 
 def dividir_mensaje(mensaje, limite=1300):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
