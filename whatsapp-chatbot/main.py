@@ -75,6 +75,8 @@ def responder_chatgpt(mensaje):
     except:
         idioma_usuario = "es"  # Si no se puede detectar, asumir español
 
+    prompt_negocio = "Información general sobre Spinzone Indoor Cycling."
+
     # 🔥 Modificamos el prompt para forzar respuesta en el mismo idioma
     prompt_modificado = f"{prompt_negocio}\n\nResponde en el idioma del usuario detectado ({idioma_usuario})."
 
