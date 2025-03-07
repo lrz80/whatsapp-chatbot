@@ -6,4 +6,5 @@ requests
 python-multipart
 thefuzz
 python-Levenshtein
+langdetect
 
