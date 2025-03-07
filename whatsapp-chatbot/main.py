@@ -21,19 +21,22 @@ def es_similar(frase_usuario, opciones, umbral=70):
     return mejor_coincidencia if score >= umbral else None
 
 
-# Configura las API Keys
-OPENAI_API_KEY = "tu_openai_api_key"
-TWILIO_NUMBER = "tu_numero_twilio"
-TWILIO_AUTH_TOKEN = "tu_auth_token"
-TWILIO_SID = "tu_twilio_sid"
+# Configuración de Twilio
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+# Configuración de OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
 
 # Inicializa FastAPI
 app = FastAPI()
 
 class Message(BaseModel):
     body: str
-
-openai.api_key = OPENAI_API_KEY
 
 # 🟢 Webhook de WhatsApp
 @app.post("/whatsapp")
@@ -142,6 +145,13 @@ def responder_chatgpt(mensaje):
 
     texto_respuesta = respuesta.choices[0].message.content.strip()
     print(f"Respuesta GPT: {texto_respuesta}")  # 🔹 Depuración
+
+    # Enviar mensaje a WhatsApp usando Twilio
+    twilio_client.messages.create(
+        from_=TWILIO_PHONE_NUMBER,
+        body=texto_respuesta,
+        to=numero
+    )
 
     return dividir_mensaje(texto_respuesta)  # Divide mensajes largos si es necesario
 
