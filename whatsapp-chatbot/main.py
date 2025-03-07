@@ -60,7 +60,7 @@ async def whatsapp_webhook(request: Request):
         return JSONResponse(content={"error": "Error procesando la solicitud"}, status_code=400)
 
 def responder_chatgpt(mensaje):
-    print(f"Mensaje clave detectado: {mensaje_clave}")
+    print(f"Mensaje recibido: {mensaje}")  # Depuración
 
     client = openai.Client()
     
