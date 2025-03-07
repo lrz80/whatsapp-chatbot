@@ -22,6 +22,11 @@ def es_similar(frase_usuario, opciones, umbral=70):
     mejor_coincidencia, score = process.extractOne(frase_usuario, opciones)
     return mejor_coincidencia if score >= umbral else None
 
+def detectar_idioma(mensaje):
+    try:
+        return detect(mensaje)
+    except:
+        return "es"  # Si no detecta el idioma, usa español por defecto
 
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -69,11 +74,8 @@ def responder_chatgpt(mensaje):
 
     client = openai.Client()
 
-    try:
-        idioma_usuario = detect(mensaje)  # Detectamos el idioma del mensaje del usuario
-        print(f"Idioma detectado: {idioma_usuario}")  # Debugging
-    except:
-        idioma_usuario = "es"  # Si no se puede detectar, asumir español
+    idioma = detectar_idioma(mensaje)  # Detectar idioma
+    print(f"Idioma detectado: {idioma}")  # Depuración
 
     prompt_negocio = "Información general sobre Spinzone Indoor Cycling."
 
