@@ -14,6 +14,7 @@ from twilio.rest import Client
 from fastapi import FastAPI, Form
 from fastapi.responses import JSONResponse
 from starlette.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -42,25 +43,25 @@ class Message(BaseModel):
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        form_data = await request.form()  # Leer los datos correctamente
-        print(f"Datos recibidos: {form_data}")  # Log para depuración
-
-        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje enviado por el usuario
-        numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
+        form_data = await request.form()  # Leer los datos del formulario
+        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje
+        numero = form_data.get("From", "").strip()  # Número de teléfono del usuario
 
         if not mensaje:
-            return JSONResponse(content={"error": "Mensaje vacío"}, status_code=400)
+            return PlainTextResponse("Mensaje vacío", status_code=400)
 
-        print(f"Mensaje recibido: {mensaje} de {numero}")
+        print(f"📩 Mensaje recibido: {mensaje} de {numero}")
 
+        # Llamamos a la función para procesar el mensaje con GPT
         respuesta = responder_chatgpt(mensaje)
-        print(f"Respuesta generada: {respuesta}")
 
-        return {"mensaje_recibido": mensaje, "numero": numero}
+        print(f"💬 Respuesta generada: {respuesta}")
+
+        return PlainTextResponse(respuesta, status_code=200)  # Responder en texto plano
 
     except Exception as e:
-        print(f"Error procesando datos: {e}")  # Log del error
-        return JSONResponse(content={"error": "Error procesando la solicitud"}, status_code=400)
+        print(f"❌ Error procesando datos: {e}")
+        return PlainTextResponse("Error interno del servidor", status_code=500)
 
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
