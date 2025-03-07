@@ -26,7 +26,7 @@ def detectar_idioma(mensaje):
     try:
         return detect(mensaje)
     except:
-        return "es"  # Si no detecta el idioma, usa español por defecto
+        return "es"  # Si hay error, usa español por defecto
 
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -72,11 +72,9 @@ async def whatsapp_webhook(request: Request):
 def responder_chatgpt(mensaje):
     print(f"Mensaje recibido: {mensaje}")  # Depuración
 
-    client = openai.Client()
-
-    idioma_usuario = detectar_idioma(mensaje)  # Detectar idioma correctamente
+    # Detectar idioma del usuario
+    idioma_usuario = detectar_idioma(mensaje)
     print(f"Idioma detectado: {idioma_usuario}")  # Depuración
-
 
     prompt_negocio = "Información general sobre Spinzone Indoor Cycling."
 
@@ -218,7 +216,7 @@ def responder_chatgpt(mensaje):
 
     print(f"Respuesta generada: {respuesta_generada}")  # Debugging
     
-    return respuesta_generada  # Retornamos la respuesta ya corregida
+    return respuesta["choices"][0]["message"]["content"]
 
 def dividir_mensaje(mensaje, limite=1300):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
