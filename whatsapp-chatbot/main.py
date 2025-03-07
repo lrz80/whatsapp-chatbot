@@ -43,10 +43,10 @@ class Message(BaseModel):
 async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()  # Leer los datos correctamente
+        print(f"Datos recibidos: {form_data}")  # Log para depuración
+
         mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje enviado por el usuario
         numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
-
-        print(f"Datos recibidos: {form_data}")  # Log para depuración
 
         if not mensaje:
             return JSONResponse(content={"error": "Mensaje vacío"}, status_code=400)
@@ -56,7 +56,7 @@ async def whatsapp_webhook(request: Request):
         respuesta = responder_chatgpt(mensaje)
         print(f"Respuesta generada: {respuesta}")
 
-        return PlainTextResponse("Recibido correctamente", status_code=200)
+        return {"mensaje_recibido": mensaje, "numero": numero}
 
     except Exception as e:
         print(f"Error procesando datos: {e}")  # Log del error
@@ -123,8 +123,7 @@ def responder_chatgpt(mensaje):
     opciones_info = ["información", "quiero información", "dame más información", "cuéntame sobre spinzone"]
 
     mensaje_clave = mensaje  # 🔹 Asegurar que siempre tenga un valor
-    numero = form_data.get("From", "")  # Extraer el número de teléfono del usuario
-    
+
     if es_similar(mensaje.lower(), opciones_horario):
         mensaje_clave = "Dime los horarios de Spinzone Indoor Cycling."
     elif es_similar(mensaje.lower(), opciones_precios):
@@ -145,14 +144,7 @@ def responder_chatgpt(mensaje):
     )
 
     texto_respuesta = respuesta.choices[0].message.content.strip()
-    print(f"Respuesta GPT: {texto_respuesta}")  # 🔹 Depuración
-
-    # Enviar mensaje a WhatsApp usando Twilio
-    twilio_client.messages.create(
-        from_=TWILIO_PHONE_NUMBER,
-        body=texto_respuesta,
-        to=numero
-    )
+    print(f"Respuesta completa de OpenAI: {respuesta}")  # 👈 Verificar si hay respuesta o si hay un error
 
     return dividir_mensaje(texto_respuesta)  # Divide mensajes largos si es necesario
 
