@@ -13,6 +13,7 @@ from thefuzz import process
 from twilio.rest import Client
 from fastapi import FastAPI, Form
 from fastapi.responses import JSONResponse
+from starlette.responses import PlainTextResponse
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -49,14 +50,14 @@ async def whatsapp_webhook(request: Request):
 
         print(f"Mensaje recibido: {mensaje} de {numero}")
 
-        return JSONResponse(content={"message": "Recibido correctamente"}, status_code=200)
+        return PlainTextResponse("Recibido correctamente", status_code=200)
 
     except Exception as e:
         print(f"Error procesando datos: {e}")  # Log del error
         return JSONResponse(content={"error": "Error procesando la solicitud"}, status_code=400)
 
 def responder_chatgpt(mensaje):
-    print(f"Mensaje recibido: {mensaje}")  # Depuración
+    print(f"Mensaje clave detectado: {mensaje_clave}")
 
     client = openai.Client()
     
@@ -132,10 +133,14 @@ def responder_chatgpt(mensaje):
     )
 
     texto_respuesta = respuesta.choices[0].message.content.strip()
+    mensajes_divididos = dividir_mensaje(texto_respuesta)
+
+    print(f"Mensajes a enviar: {mensajes_divididos}")  # Depuración
+
 
     return dividir_mensaje(texto_respuesta)  # Separa en partes si es necesario
 
-def dividir_mensaje(mensaje, limite=1500):
+def dividir_mensaje(mensaje, limite=1300):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
     partes = []
     while len(mensaje) > limite:
