@@ -79,7 +79,7 @@ def responder_chatgpt(mensaje):
     # Pedir a OpenAI que detecte el idioma del usuario directamente
     prompt_detectar_idioma = f"Detecta el idioma de este mensaje y responde solo con 'es' o 'en': {mensaje}"
     
-    respuesta = client.chat.completions.create(
+    respuesta_idioma = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "user", "content": prompt_detectar_idioma}]
 )
