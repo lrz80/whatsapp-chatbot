@@ -77,7 +77,14 @@ async def whatsapp_webhook(request: Request):
 
         print(f"💬 Respuesta generada: {respuesta}")
 
-        return PlainTextResponse(respuesta, status_code=200)  # Responder en texto plano
+        # Dividir la respuesta si es demasiado larga
+        partes_respuesta = dividir_mensaje(respuesta)
+
+        # Unir todas las partes en una respuesta
+        respuesta_final = "\n\n".join(partes_respuesta)
+
+        return PlainTextResponse(respuesta_final, status_code=200)
+
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
