@@ -30,7 +30,7 @@ def detectar_idioma(mensaje):
     except:
         return "es"  # Si hay error, usa español por defecto
 
-def dividir_mensaje(mensaje, limite=1400):
+def dividir_mensaje(mensaje, limite=1300):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
     partes = []
     while len(mensaje) > limite:
@@ -45,20 +45,22 @@ def dividir_mensaje(mensaje, limite=1400):
 async def transcribir_audio(audio_url: str) -> str:
     """ Descarga un audio desde la URL y lo transcribe con Whisper """
     try:
-        # Descargar el audio desde Twilio
         response = requests.get(audio_url)
         if response.status_code != 200:
             return "❌ Error al descargar el audio."
 
-        # Guardar el archivo temporalmente
         with open("audio.ogg", "wb") as f:
             f.write(response.content)
 
-        # Enviar el audio a OpenAI Whisper para transcripción
-        with open("audio.ogg", "rb") as audio_file:
-            transcript = openai.Audio.transcribe("whisper-1", audio_file)
+        client = openai.Client()  # Crea un cliente OpenAI
 
-        return transcript["text"]
+        with open("audio.ogg", "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+
+        return transcript.text  # Accede correctamente al texto transcrito
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
