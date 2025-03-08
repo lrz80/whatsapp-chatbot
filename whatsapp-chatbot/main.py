@@ -30,6 +30,18 @@ def detectar_idioma(mensaje):
     except:
         return "es"  # Si hay error, usa español por defecto
 
+def dividir_mensaje(mensaje, limite=1300):
+    """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
+    partes = []
+    while len(mensaje) > limite:
+        corte = mensaje[:limite].rfind(" ")  # Buscar espacio antes del límite
+        if corte == -1:
+            corte = limite  # Si no hay espacio, cortar en el límite exacto
+        partes.append(mensaje[:corte])
+        mensaje = mensaje[corte:].strip()
+    partes.append(mensaje)  # Agregar la última parte
+    return partes
+
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -217,20 +229,6 @@ def responder_chatgpt(mensaje):
     print(f"💬 Respuesta generada: {mensaje_respuesta}")  # 🔴 Depuración
 
     return mensaje_respuesta
-
-
-def dividir_mensaje(mensaje, limite=1300):
-    """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
-    partes = []
-    while len(mensaje) > limite:
-        corte = mensaje.rfind("\n", 0, limite)  # Busca un salto de línea antes del límite
-        if corte == -1:  # Si no hay salto de línea, corta en el límite exacto
-            corte = limite
-        partes.append(mensaje[:corte])
-        mensaje = mensaje[corte:].strip()
-    partes.append(mensaje)  # Agrega la última parte
-    return partes
-
 
 def analizar_imagen(url_imagen):
     client = openai.Client()
