@@ -30,7 +30,7 @@ def detectar_idioma(mensaje):
     except:
         return "es"  # Si hay error, usa español por defecto
 
-def dividir_mensaje(mensaje, limite=1300):
+def dividir_mensaje(mensaje, limite=1400):
     """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
     partes = []
     while len(mensaje) > limite:
@@ -77,13 +77,13 @@ async def whatsapp_webhook(request: Request):
 
         print(f"💬 Respuesta generada: {respuesta}")
 
-        # Dividir la respuesta si es demasiado larga
-        partes_respuesta = dividir_mensaje(respuesta)
+        # Convertir a texto plano y eliminar caracteres problemáticos
+        respuesta_final = str(respuesta).encode("utf-8", "ignore").decode("utf-8")
+        partes_respuesta = dividir_mensaje(respuesta_final)  # Asegurar que no supere los 1600 caracteres
 
-        # Unir todas las partes en una respuesta
-        respuesta_final = "\n\n".join(partes_respuesta)
+        # Enviar la respuesta corregida
+        return PlainTextResponse("\n\n".join(partes_respuesta), status_code=200)
 
-        return PlainTextResponse(respuesta_final, status_code=200)
 
 
     except Exception as e:
