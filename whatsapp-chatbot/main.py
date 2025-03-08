@@ -42,6 +42,28 @@ def dividir_mensaje(mensaje, limite=1400):
     partes.append(mensaje)  # Agregar la última parte
     return partes
 
+async def transcribir_audio(audio_url: str) -> str:
+    """ Descarga un audio desde la URL y lo transcribe con Whisper """
+    try:
+        # Descargar el audio desde Twilio
+        response = requests.get(audio_url)
+        if response.status_code != 200:
+            return "❌ Error al descargar el audio."
+
+        # Guardar el archivo temporalmente
+        with open("audio.ogg", "wb") as f:
+            f.write(response.content)
+
+        # Enviar el audio a OpenAI Whisper para transcripción
+        with open("audio.ogg", "rb") as audio_file:
+            transcript = openai.Audio.transcribe("whisper-1", audio_file)
+
+        return transcript["text"]
+
+    except Exception as e:
+        print(f"❌ Error en la transcripción: {e}")
+        return "No pude entender el audio. Intenta de nuevo."
+
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -64,27 +86,24 @@ class Message(BaseModel):
 async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()  # Leer los datos del formulario
-        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje
-        numero = form_data.get("From", "").strip()  # Número de teléfono del usuario
+        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje de texto
+        numero = form_data.get("From", "").strip()  # Extraer el número del usuario
+        audio_url = form_data.get("MediaUrl0")  # URL del audio si es una nota de voz
+
+        if audio_url:
+            print(f"🎙️ Nota de voz recibida: {audio_url}")  # Log de la nota de voz
+            texto_transcrito = await transcribir_audio(audio_url)  # Llamar a la función
+
+            # Enviar la transcripción a ChatGPT para obtener una respuesta
+            respuesta = responder_chatgpt(texto_transcrito)
+            return PlainTextResponse(respuesta, status_code=200)
 
         if not mensaje:
             return PlainTextResponse("Mensaje vacío", status_code=400)
 
-        print(f"📩 Mensaje recibido: {mensaje} de {numero}")
-
-        # Llamamos a la función para procesar el mensaje con GPT
+        # Procesar mensaje de texto normalmente con ChatGPT
         respuesta = responder_chatgpt(mensaje)
-
-        print(f"💬 Respuesta generada: {respuesta}")
-
-        # Convertir a texto plano y eliminar caracteres problemáticos
-        respuesta_final = str(respuesta).encode("utf-8", "ignore").decode("utf-8")
-        partes_respuesta = dividir_mensaje(respuesta_final)  # Asegurar que no supere los 1600 caracteres
-
-        # Enviar la respuesta corregida
-        return PlainTextResponse("\n\n".join(partes_respuesta), status_code=200)
-
-
+        return PlainTextResponse(respuesta, status_code=200)
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
