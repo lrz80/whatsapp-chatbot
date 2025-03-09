@@ -77,33 +77,38 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI 1.64.0 """
+    """ Descarga y transcribe un archivo de audio usando OpenAI """
     try:
-        print(f"🔗 Descargando audio desde Twilio: {audio_url}")
+        print(f"🔗 URL de la nota de voz recibida: {audio_url}")
+
+        # 🚨 **Revisar que la URL es válida**
+        if not audio_url.startswith("http"):
+            print(f"❌ URL inválida: {audio_url}")
+            return "Error: URL inválida."
 
         # 📥 **Descargar el audio desde Twilio**
-        response = requests.get(audio_url, stream=True)
-        if response.status_code != 200:
-            print(f"❌ Error al descargar el audio desde Twilio: {response.status_code}")
-            return "Error al descargar el audio."
+        headers = {"User-Agent": "Mozilla/5.0"}  # Simular navegador
+        response = requests.get(audio_url, headers=headers, stream=True)
 
-        # 📌 **Guardar el archivo localmente antes de abrirlo**
+        if response.status_code != 200:
+            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
+            return "No se pudo descargar el audio."
+
+        # 📌 **Guardar el archivo correctamente**
         audio_path = "audio_recibido.ogg"
         with open(audio_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024):
                 f.write(chunk)
 
-        # ✅ Verificar si el archivo se guardó correctamente
+        # ✅ **Verificar si el archivo existe**
         if not os.path.exists(audio_path):
-            print(f"❌ ERROR: El archivo {audio_path} no se creó correctamente.")
+            print(f"❌ ERROR: No se creó el archivo {audio_path}.")
             return "No se pudo guardar el audio."
 
-        print(f"✅ Audio guardado en: {audio_path}, Tamaño: {os.path.getsize(audio_path)} bytes")
-
-        # 📡 **Conectar con OpenAI Whisper**
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        print(f"✅ Archivo guardado correctamente: {audio_path} - Tamaño: {os.path.getsize(audio_path)} bytes")
 
         # 🎙 **Enviar el audio a Whisper para transcripción**
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         with open(audio_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
@@ -112,12 +117,11 @@ def transcribir_audio(audio_url: str) -> str:
 
         print(f"📝 Transcripción obtenida: {transcript.text}")
 
-        return transcript.text  # ✅ Retorna la transcripción
+        return transcript.text  # ✅ Retorna el texto transcrito
 
     except Exception as e:
-        print(f"❌ Error en la transcripción: {e}")
+        print(f"❌ ERROR en transcripción: {e}")
         return "No pude entender el audio. Intenta de nuevo."
-
     
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
