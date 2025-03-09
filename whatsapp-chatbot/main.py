@@ -77,30 +77,30 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI 1.65.0 """
+    """ Descarga y transcribe un archivo de audio usando OpenAI 1.64.0 """
     try:
-        # 📥 Descargar el audio desde Twilio
+        # Descargar el audio desde Twilio
         response = requests.get(audio_url)
         if response.status_code != 200:
             print("❌ Error al descargar el audio.")
             return "Error al descargar el audio."
 
-        # 📂 Guardar el archivo temporalmente
+        # Guardar el archivo temporalmente
         audio_path = "audio.ogg"
         with open(audio_path, "wb") as f:
             f.write(response.content)
 
-        # 🔑 Crear el cliente de OpenAI
-        client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
+        # Crear el cliente de OpenAI
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        # 📝 Enviar el audio a Whisper para transcripción
+        # Enviar el audio a Whisper para transcripción
         with open(audio_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
 
-        return transcript.text  # ✅ Retorna el texto transcrito
+        return transcript.text  # ✅ Retorna el texto transcrito correctamente
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
@@ -132,8 +132,8 @@ async def whatsapp_webhook(request: Request):
         url_audio = form_data.get("MediaUrl0")  # 📌 Asegurar que la URL del audio es correcta
 
         if url_audio:
-            print(f"📥 Nota de voz recibida: {url_audio}")
-            mensaje = transcribir_audio(url_audio)  # ✅ Corrección aquí (sin await)
+            print(f"🎤 Nota de voz recibida: {url_audio}")
+            mensaje = transcribir_audio(url_audio)  # ✅ Sin `await`, ya que ahora es síncrona
 
             if mensaje:
                 print(f"📝 Transcripción: {mensaje}")
