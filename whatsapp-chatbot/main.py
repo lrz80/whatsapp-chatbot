@@ -76,21 +76,45 @@ def dividir_mensaje(mensaje, limite=1300):
     partes.append(mensaje)  # Agregar la última parte
     return partes
 
-def transcribir_audio(ruta_wav):
+def transcribir_audio(audio_url: str) -> str:
+    """Descarga y transcribe un archivo de audio usando OpenAI Whisper"""
     try:
+        # Descargar el audio desde la URL de Twilio
+        response = requests.get(audio_url)
+        if response.status_code != 200:
+            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
+            return "No se pudo procesar la nota de voz."
+
+        # Guardar el archivo temporalmente en MP3/OGG
+        ruta_mp3 = "audio_recibido.mp3"
+        with open(ruta_mp3, "wb") as file:
+            file.write(response.content)
+        print(f"✅ Audio guardado correctamente: {ruta_mp3}")
+
+        # Convertir a WAV usando ffmpeg
+        ruta_wav = "audio_recibido.wav"
+        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
+        
+        # Ejecutar conversión con ffmpeg
+        subprocess.run(comando, shell=True, check=True)
+        print(f"✅ Conversión a WAV completada: {ruta_wav}")
+
+        # Crear cliente OpenAI
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+        # Enviar a Whisper para transcripción
         with open(ruta_wav, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
 
-        return transcript.text  # ✅ Retorna el texto transcrito
+        # Retornar transcripción
+        return transcript.text
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
-        return "No pude entender el audio. Intenta de nuevo."
+        return "No se pudo entender el audio. Intenta de nuevo."
 
     
 def descargar_audio(url_audio):
