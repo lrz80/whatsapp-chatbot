@@ -10,3 +10,4 @@ langdetect
 pydub
 ffmpeg-python
 speechrecognition
+aiofiles
