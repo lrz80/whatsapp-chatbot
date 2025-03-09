@@ -77,49 +77,25 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 def transcribir_audio(audio_url: str) -> str:
-    try:
-        subprocess.run(["ffmpeg", "-version"], check=True)
-        print("✔ FFmpeg está instalado y funcionando correctamente.")
-    except FileNotFoundError:
-        print("❌ Error: FFmpeg no está instalado.")
+    """ Descarga y transcribe un archivo de audio usando OpenAI Whisper. """
     try:
         # Descargar el audio desde Twilio
         response = requests.get(audio_url)
         if response.status_code != 200:
-            return "❌ Error al descargar el audio."
+            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
+            return "No se pudo procesar la nota de voz."
 
-        # Guardar el archivo temporalmente en formato MP3
+        # Guardar el archivo temporalmente
         ruta_mp3 = "audio_recibido.mp3"
         with open(ruta_mp3, "wb") as f:
             f.write(response.content)
+        print(f"✅ Audio guardado correctamente: {ruta_mp3}")
 
-        # 🔍 Verificar si el archivo MP3 se descargó correctamente
-        if os.path.exists(ruta_mp3):
-            print(f"✔ Archivo MP3 descargado. Tamaño: {os.path.getsize(ruta_mp3)} bytes")
-        else:
-            print("❌ Error: El archivo MP3 no se descargó correctamente.")
-            return "No se pudo procesar la nota de voz."
-
-        # Convertir MP3 a WAV con FFmpeg
+        # Convertir MP3 a WAV compatible con Whisper
         ruta_wav = "audio_recibido.wav"
-        comando = [
-            "ffmpeg", "-y", "-i", ruta_mp3,
-            "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", ruta_wav
-        ]
-
-        try:
-            resultado = subprocess.run(comando, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print(f"✔ Conversión a WAV exitosa: {ruta_wav}")
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Error en FFmpeg: {e.stderr.decode()}")
-            return "No se pudo procesar la nota de voz."
-
-        # 🔍 Verificar si el archivo WAV se generó correctamente
-        if os.path.exists(ruta_wav):
-            print(f"✔ Archivo WAV listo. Tamaño: {os.path.getsize(ruta_wav)} bytes")
-        else:
-            print("❌ Error: No se generó correctamente el archivo WAV.")
-            return "No se pudo procesar la nota de voz."
+        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
+        subprocess.run(comando, shell=True, check=True)
+        print(f"✅ Audio convertido a WAV: {ruta_wav}")
 
         # Crear el cliente de OpenAI
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -131,12 +107,12 @@ def transcribir_audio(audio_url: str) -> str:
                 file=audio_file
             )
 
-        return transcript.text  # ✔ Retorna el texto transcrito
+        print(f"✅ Transcripción: {transcript.text}")
+        return transcript.text  # Retorna el texto transcrito
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
-        return "No se pudo entender el audio. Intenta de nuevo."
-
+        return "No se pudo procesar la nota de voz."
     
 def descargar_audio(url_audio):
     """ Descarga un archivo de audio desde Twilio con autenticación """
