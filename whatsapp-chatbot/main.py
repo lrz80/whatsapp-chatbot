@@ -76,39 +76,37 @@ def dividir_mensaje(mensaje, limite=1300):
     partes.append(mensaje)  # Agregar la última parte
     return partes
 
-def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI Whisper. """
+def transcribir_audio(url_audio):
     try:
-        # Descargar el audio desde Twilio
-        response = requests.get(audio_url)
+        # Descargar el archivo de audio
+        response = requests.get(url_audio)
         if response.status_code != 200:
-            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
-            return "No se pudo procesar la nota de voz."
-
-        # Guardar el archivo temporalmente
+            raise Exception(f"Error al descargar el audio. Código HTTP: {response.status_code}")
+        
+        # Guardar el archivo como MP3
         ruta_mp3 = "audio_recibido.mp3"
-        with open(ruta_mp3, "wb") as f:
-            f.write(response.content)
+        with open(ruta_mp3, "wb") as file:
+            file.write(response.content)
+
         print(f"✅ Audio guardado correctamente: {ruta_mp3}")
 
-        # Convertir MP3 a WAV compatible con Whisper
+        # Convertir a WAV compatible con Whisper
         ruta_wav = "audio_recibido.wav"
-        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
+        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav} -y"
         subprocess.run(comando, shell=True, check=True)
-        print(f"✅ Audio convertido a WAV: {ruta_wav}")
 
-        # Crear el cliente de OpenAI
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        print(f"✅ Conversión completada: {ruta_wav}")
 
-        # Enviar el audio a Whisper para transcripción
+        # Transcribir el audio (usa la librería de OpenAI o Whisper)
+        import openai
         with open(ruta_wav, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
+            respuesta = openai.Audio.transcribe("whisper-1", audio_file)
 
-        print(f"✅ Transcripción: {transcript.text}")
-        return transcript.text  # Retorna el texto transcrito
+        # Eliminar archivos temporales
+        os.remove(ruta_mp3)
+        os.remove(ruta_wav)
+
+        return respuesta.get("text", "")
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
@@ -181,15 +179,14 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # Usar la clave correcta
+        url_audio = form_data.get("MediaUrl0")  # La URL del audio
 
         if url_audio:
             print(f"🎤 Nota de voz recibida: {url_audio}")
-            ruta_wav = procesar_audio(url_audio)  # Obtiene el archivo convertido
-            if ruta_wav:
-                mensaje = transcribir_audio(ruta_wav)  # Transcribe el audio
-                print(f"📝 Transcripción: {mensaje}")
+            mensaje = transcribir_audio(url_audio)  # Llamar a la función sin await
 
+            if mensaje:
+                print(f"📝 Transcripción: {mensaje}")
 
         if not mensaje:
             return PlainTextResponse("Mensaje vacío", status_code=400)
