@@ -85,7 +85,7 @@ def transcribir_audio(audio_url: str) -> str:
             print("❌ Error al descargar el audio.")
             return "Error al descargar el audio."
 
-        # 📂 Guardar el archivo temporalmente en formato MP3
+        # 📂 Guardar el archivo temporalmente
         audio_path = "audio.ogg"
         with open(audio_path, "wb") as f:
             f.write(response.content)
@@ -133,7 +133,7 @@ async def whatsapp_webhook(request: Request):
 
         if url_audio:
             print(f"📥 Nota de voz recibida: {url_audio}")
-            mensaje = transcribir_audio(url_audio)  # 🔥 No es `await`, porque `transcribir_audio` es función normal
+            mensaje = transcribir_audio(url_audio)  # ✅ Corrección aquí (sin await)
 
             if mensaje:
                 print(f"📝 Transcripción: {mensaje}")
