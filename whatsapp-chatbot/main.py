@@ -18,6 +18,7 @@ from fastapi.responses import PlainTextResponse
 from langdetect import detect
 from pydub import AudioSegment
 import speech_recognition as sr
+import aiofiles  # Para manejar archivos de manera asíncrona
 
 # Configurar el path de ffmpeg para pydub
 os.environ["FFMPEG_EXECUTABLE"] = "C:\\ffmpeg\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg.exe"
@@ -89,7 +90,7 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 async def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI 1.64.0 """
+    """ Descarga y transcribe un archivo de audio usando OpenAI 1.65.0 """
     try:
         # 📥 Descargar el audio desde Twilio
         response = requests.get(audio_url)
@@ -99,15 +100,15 @@ async def transcribir_audio(audio_url: str) -> str:
 
         # 📂 Guardar el archivo temporalmente
         audio_path = "audio.ogg"
-        with open(audio_path, "wb") as f:
-            f.write(response.content)
+        async with aiofiles.open(audio_path, "wb") as f:
+            await f.write(response.content)
 
         # 🔑 Crear el cliente de OpenAI
         client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
         # 📝 Enviar el audio a Whisper para transcripción
-        with open(audio_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
+        async with aiofiles.open(audio_path, "rb") as audio_file:
+            transcript = await client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
@@ -141,17 +142,11 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # Obtener URL del audio
+        url_audio = form_data.get("MediaUrl0")  # 📌 Detectar si hay un archivo adjunto
 
         if url_audio:
-            print(f"🎤 Nota de voz recibida: {url_audio}")
-
-            # ✅ Asegurar que la URL es válida
-            if not url_audio.startswith("http"):
-                print("❌ Error: URL de audio inválida")
-                return PlainTextResponse("Error: URL de audio inválida", status_code=400)
-
-            ruta_mp3 = await transcribir_audio(url_audio)  # ✅ Usar await
+            print(f"📥 Nota de voz recibida: {url_audio}")
+            ruta_mp3 = await transcribir_audio(url_audio)  # 🔥 Aquí usamos `await`
 
             if ruta_mp3:
                 mensaje = ruta_mp3
