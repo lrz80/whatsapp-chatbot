@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI, Request, Form
 import openai
 import requests
+import subprocess
 from twilio.twiml.messaging_response import MessagingResponse
 from fastapi.responses import Response
 from fastapi import FastAPI
@@ -23,32 +24,41 @@ import aiofiles  # Para manejar archivos de manera asíncrona
 # Configurar el path de ffmpeg para pydub
 os.environ["FFMPEG_EXECUTABLE"] = "C:\\ffmpeg\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg.exe"
 
-def procesar_audio(audio_url):
-    """
-    Descarga el audio desde WhatsApp, lo convierte a WAV y lo transcribe a texto.
-    """
+def procesar_audio(url_audio):
     try:
-        # Descargar el archivo de audio
-        audio_path = "audio.ogg"
-        response = requests.get(audio_url)
-        with open(audio_path, "wb") as file:
+        # Descargar el archivo de audio desde Twilio
+        response = requests.get(url_audio)
+        if response.status_code != 200:
+            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
+            return None
+
+        # Guardar el archivo como MP3 temporalmente
+        ruta_mp3 = "audio_recibido.mp3"
+        with open(ruta_mp3, "wb") as file:
             file.write(response.content)
 
-        # Convertir OGG a WAV (WhatsApp envía notas de voz en OGG)
-        audio_wav = "audio.wav"
-        audio = AudioSegment.from_file(audio_path, format="ogg")
-        audio.export(audio_wav, format="wav")
+        # Verificar si el archivo MP3 se descargó correctamente
+        if os.path.getsize(ruta_mp3) == 0:
+            print("❌ Error: El archivo descargado está vacío.")
+            return None
 
-        # Transcribir audio a texto con SpeechRecognition
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_wav) as source:
-            audio_data = recognizer.record(source)
-            texto = recognizer.recognize_google(audio_data, language="es")  # Cambia a "en" si solo deseas inglés
+        # Convertir el MP3 a WAV con FFmpeg
+        ruta_wav = "audio_recibido.wav"
+        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
+        
+        try:
+            subprocess.run(comando, shell=True, check=True)
+            print(f"✅ Conversión exitosa: {ruta_wav}")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error en la conversión de audio con FFmpeg: {e}")
+            return None
 
-        return texto
+        # Devolver la ruta del archivo convertido
+        return ruta_wav
 
     except Exception as e:
-        return f"Error procesando audio: {str(e)}"
+        print(f"❌ Error en procesar_audio: {e}")
+        return None
 
 
 def es_similar(frase_usuario, opciones, umbral=70):
@@ -148,10 +158,11 @@ def descargar_audio(url_audio):
             return None
 
         # Guardar el archivo
-        ruta_mp3 = "audio_recibido.ogg"
+        ruta_mp3 = "audio_recibido.mp3"
         with open(ruta_mp3, "wb") as file:
-            for chunk in response.iter_content(chunk_size=1024):
-                file.write(chunk)
+            file.write(response.content)
+            print(f"Tamaño del archivo descargado: {os.path.getsize(ruta_mp3)} bytes")
+
 
         # Verificar que el archivo fue guardado correctamente
         if os.path.exists(ruta_mp3) and os.path.getsize(ruta_mp3) > 0:
@@ -191,12 +202,12 @@ async def whatsapp_webhook(request: Request):
         url_audio = form_data.get("MediaUrl0")  # Usar la clave correcta
 
         if url_audio:
-            print(f"🔗 Nota de voz recibida: {url_audio}")
-            ruta_audio = descargar_audio(url_audio)  # Descargar con autenticación
-            
-            if ruta_audio:
-                mensaje = transcribir_audio(ruta_audio)
-                print(f"📝 Transcripción: {mensaje}")
+            print(f"🎤 Nota de voz recibida: {url_audio}")
+            ruta_wav = procesar_audio(url_audio)  # Ahora devuelve un archivo WAV
+
+            if ruta_wav:
+                mensaje = transcribir_audio(ruta_wav)
+                print(f"✍️ Transcripción: {mensaje}")
 
         if not mensaje:
             return PlainTextResponse("Mensaje vacío", status_code=400)
