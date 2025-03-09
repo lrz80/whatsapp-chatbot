@@ -105,6 +105,7 @@ def transcribir_audio(audio_url: str) -> str:
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
         return "No pude entender el audio. Intenta de nuevo."
+
     
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -351,18 +352,6 @@ def analizar_imagen(url_imagen):
         ]
     )
     return respuesta["choices"][0]["message"]["content"]
-
-# 🔴 Función para transcribir notas de voz con Whisper
-@app.post("/transcribir_audio")
-async def transcribir_audio(url_audio: str):
-    audio_data = requests.get(url_audio).content
-    with open("audio.ogg", "wb") as f:
-        f.write(audio_data)
-
-    audio_file = open("audio.ogg", "rb")
-    transcript = openai.Audio.transcribe("whisper-1", audio_file)
-    
-    return {"texto_transcrito": transcript["text"]}
 
 # Obtener el puerto desde las variables de entorno de Railway
 PORT = int(os.environ.get("PORT", 8000))
