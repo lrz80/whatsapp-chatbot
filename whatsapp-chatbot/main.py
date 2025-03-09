@@ -93,7 +93,12 @@ def transcribir_audio(audio_url: str) -> str:
             for chunk in response.iter_content(chunk_size=1024):
                 f.write(chunk)
 
-        print(f"✅ Audio guardado en: {audio_path}")
+        # ✅ Verificar si el archivo se guardó correctamente
+        if not os.path.exists(audio_path):
+            print(f"❌ ERROR: El archivo {audio_path} no se creó correctamente.")
+            return "No se pudo guardar el audio."
+
+        print(f"✅ Audio guardado en: {audio_path}, Tamaño: {os.path.getsize(audio_path)} bytes")
 
         # 📡 **Conectar con OpenAI Whisper**
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
