@@ -122,6 +122,41 @@ def transcribir_audio(audio_url: str) -> str:
         print(f"❌ ERROR en transcripción: {e}")
         return "No pude entender el audio. Intenta de nuevo."
     
+def descargar_audio(url_audio):
+    """ Descarga un archivo de audio desde Twilio con autenticación """
+    try:
+        print(f"🔗 Intentando descargar: {url_audio}")
+
+        # Validar si la URL comienza con http
+        if not url_audio.startswith("http"):
+            print(f"❌ URL inválida: {url_audio}")
+            return None
+
+        # Realizar la solicitud con autenticación
+        response = requests.get(url_audio, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), stream=True)
+
+        if response.status_code != 200:
+            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
+            return None
+
+        # Guardar el archivo
+        ruta_mp3 = "audio_recibido.ogg"
+        with open(ruta_mp3, "wb") as file:
+            for chunk in response.iter_content(chunk_size=1024):
+                file.write(chunk)
+
+        # Verificar si se guardó correctamente
+        if os.path.exists(ruta_mp3) and os.path.getsize(ruta_mp3) > 0:
+            print(f"✅ Audio guardado correctamente: {ruta_mp3}")
+            return ruta_mp3
+        else:
+            print("❌ ERROR: No se pudo guardar el audio.")
+            return None
+
+    except Exception as e:
+        print(f"❌ ERROR en descarga de audio: {e}")
+        return None
+    
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
