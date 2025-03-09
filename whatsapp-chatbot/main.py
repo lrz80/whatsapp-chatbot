@@ -143,25 +143,31 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # Detectar si hay un archivo adjunto
-        
+        url_audio = form_data.get("MediaUrl0")  # Obtener URL del audio
+
         if url_audio:
             print(f"🎤 Nota de voz recibida: {url_audio}")
-            ruta_mp3 = procesar_audio(url_audio)
+
+            # ✅ Asegurar que la URL es válida
+            if not url_audio.startswith("http"):
+                print("❌ Error: URL de audio inválida")
+                return PlainTextResponse("Error: URL de audio inválida", status_code=400)
+
+            ruta_mp3 = await transcribir_audio(url_audio)  # ✅ Usar await
 
             if ruta_mp3:
-                mensaje = await transcribir_audio(ruta_mp3)  # ✅ Agrega await
+                mensaje = ruta_mp3
                 print(f"📝 Transcripción: {mensaje}")
 
         if not mensaje:
-            return {"message": "Mensaje vacío", "status": 400}
+            return PlainTextResponse("Mensaje vacío", status_code=400)
 
         respuesta = responder_chatgpt(mensaje)
-        return {"message": respuesta, "status": 200}
+        return PlainTextResponse(respuesta, status_code=200)
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
-        return {"message": "Error interno del servidor", "status": 500}
+        return PlainTextResponse("Error interno del servidor", status_code=500)
 
 # Función para procesar el audio recibido
 def procesar_audio(url_audio):
