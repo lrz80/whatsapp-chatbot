@@ -77,18 +77,17 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI """
+    """ Descarga y transcribe un archivo de audio desde Twilio usando OpenAI Whisper """
     try:
         print(f"🔗 URL de la nota de voz recibida: {audio_url}")
 
-        # 🚨 **Revisar que la URL es válida**
+        # 🚨 **Validar la URL**
         if not audio_url.startswith("http"):
             print(f"❌ URL inválida: {audio_url}")
             return "Error: URL inválida."
 
-        # 📥 **Descargar el audio desde Twilio**
-        headers = {"User-Agent": "Mozilla/5.0"}  # Simular navegador
-        response = requests.get(audio_url, headers=headers, stream=True)
+        # 📥 **Descargar el audio desde Twilio con autenticación**
+        response = requests.get(audio_url, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), stream=True)
 
         if response.status_code != 200:
             print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
@@ -101,7 +100,7 @@ def transcribir_audio(audio_url: str) -> str:
                 f.write(chunk)
 
         # ✅ **Verificar si el archivo existe**
-        if not os.path.exists(audio_path):
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
             print(f"❌ ERROR: No se creó el archivo {audio_path}.")
             return "No se pudo guardar el audio."
 
