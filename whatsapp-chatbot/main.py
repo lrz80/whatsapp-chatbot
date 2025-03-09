@@ -89,30 +89,28 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 async def transcribir_audio(audio_url: str) -> str:
-    """ Descarga y transcribe un archivo de audio usando OpenAI 1.65.0 """
+    """ Descarga y transcribe un archivo de audio usando OpenAI 1.64.0 """
     try:
         # 📥 Descargar el audio desde Twilio
         response = requests.get(audio_url)
         if response.status_code != 200:
-            return "❌ Error al descargar el audio."
+            print("❌ Error al descargar el audio.")
+            return "Error al descargar el audio."
 
-        # 📁 Guardar el archivo temporalmente
+        # 📂 Guardar el archivo temporalmente
         audio_path = "audio.ogg"
         with open(audio_path, "wb") as f:
             f.write(response.content)
 
-        # 🎙️ Crear el cliente de OpenAI
+        # 🔑 Crear el cliente de OpenAI
         client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
-        # 🎤 Enviar el audio a Whisper para transcripción
+        # 📝 Enviar el audio a Whisper para transcripción
         with open(audio_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
-
-        # 🗑️ Eliminar archivo temporal
-        os.remove(audio_path)
 
         return transcript.text  # ✅ Retorna el texto transcrito
 
