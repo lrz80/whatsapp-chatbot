@@ -16,6 +16,52 @@ from fastapi.responses import JSONResponse
 from starlette.responses import PlainTextResponse
 from fastapi.responses import PlainTextResponse
 from langdetect import detect
+from pydub import AudioSegment
+import speech_recognition as sr
+
+# Configurar el path de ffmpeg para pydub
+os.environ["FFMPEG_EXECUTABLE"] = "C:\\ffmpeg\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg.exe"
+
+def procesar_audio(audio_url):
+    """
+    Descarga el audio desde WhatsApp, lo convierte a WAV y lo transcribe a texto.
+    """
+    try:
+        # Descargar el archivo de audio
+        audio_path = "audio.ogg"
+        response = requests.get(audio_url)
+        with open(audio_path, "wb") as file:
+            file.write(response.content)
+
+        # Convertir OGG a WAV (WhatsApp envía notas de voz en OGG)
+        audio_wav = "audio.wav"
+        audio = AudioSegment.from_file(audio_path, format="ogg")
+        audio.export(audio_wav, format="wav")
+
+        # Transcribir audio a texto con SpeechRecognition
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_wav) as source:
+            audio_data = recognizer.record(source)
+            texto = recognizer.recognize_google(audio_data, language="es")  # Cambia a "en" si solo deseas inglés
+
+        return texto
+
+    except Exception as e:
+        return f"Error procesando audio: {str(e)}"
+
+
+# Función para transcribir audio con OpenAI
+def transcribir_audio(ruta_mp3):
+    try:
+        with open(ruta_mp3, "rb") as audio_file:
+            respuesta = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+            return respuesta.text  # Devolver la transcripción
+    except Exception as e:
+        print(f"❌ Error en transcripción: {e}")
+        return None
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -43,29 +89,34 @@ def dividir_mensaje(mensaje, limite=1300):
     return partes
 
 async def transcribir_audio(audio_url: str) -> str:
-    """ Descarga un audio desde la URL y lo transcribe con Whisper """
+    """ Descarga y transcribe un archivo de audio usando OpenAI 1.64.0 """
     try:
+        # 🔹 Descargar el audio desde Twilio
         response = requests.get(audio_url)
         if response.status_code != 200:
             return "❌ Error al descargar el audio."
 
-        with open("audio.ogg", "wb") as f:
+        # 🔹 Guardar el archivo temporalmente
+        audio_path = "audio.ogg"
+        with open(audio_path, "wb") as f:
             f.write(response.content)
 
-        client = openai.Client()  # Crea un cliente OpenAI
+        # 🔹 Crear el cliente de OpenAI
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        with open("audio.ogg", "rb") as audio_file:
+        # 🔹 Enviar el audio a Whisper para transcripción
+        with open(audio_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
 
-        return transcript.text  # Accede correctamente al texto transcrito
+        return transcript.text  # ✅ Retorna el texto transcrito
 
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
         return "No pude entender el audio. Intenta de nuevo."
-
+    
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -87,29 +138,61 @@ class Message(BaseModel):
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        form_data = await request.form()  # Leer los datos del formulario
-        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje de texto
-        numero = form_data.get("From", "").strip()  # Extraer el número del usuario
-        audio_url = form_data.get("MediaUrl0")  # URL del audio si es una nota de voz
+        form_data = await request.form()
+        mensaje = form_data.get("Body", "").strip()
+        url_audio = form_data.get("MediaUrl0")  # Detectar si hay un archivo adjunto
+        
+        if url_audio:
+            print(f"🎤 Nota de voz recibida: {url_audio}")
+            ruta_mp3 = procesar_audio(url_audio)
 
-        if audio_url:
-            print(f"🎙️ Nota de voz recibida: {audio_url}")  # Log de la nota de voz
-            texto_transcrito = await transcribir_audio(audio_url)  # Llamar a la función
-
-            # Enviar la transcripción a ChatGPT para obtener una respuesta
-            respuesta = responder_chatgpt(texto_transcrito)
-            return PlainTextResponse(respuesta, status_code=200)
+            if ruta_mp3:
+                mensaje = transcribir_audio(ruta_mp3)
+                print(f"📜 Transcripción: {mensaje}")
 
         if not mensaje:
-            return PlainTextResponse("Mensaje vacío", status_code=400)
+            return {"message": "Mensaje vacío", "status": 400}
 
-        # Procesar mensaje de texto normalmente con ChatGPT
         respuesta = responder_chatgpt(mensaje)
-        return PlainTextResponse(respuesta, status_code=200)
+        return {"message": respuesta, "status": 200}
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
-        return PlainTextResponse("Error interno del servidor", status_code=500)
+        return {"message": "Error interno del servidor", "status": 500}
+
+# Función para procesar el audio recibido
+def procesar_audio(url_audio):
+    try:
+        response = requests.get(url_audio)
+        ruta_mp3 = "audio_recibido.mp3"
+
+        with open(ruta_mp3, "wb") as file:
+            file.write(response.content)
+
+        return ruta_mp3
+
+    except Exception as e:
+        print(f"❌ Error al descargar el audio: {e}")
+        return None
+
+# Función para transcribir el audio
+def transcribir_audio(ruta_mp3):
+    try:
+        audio = AudioSegment.from_file(ruta_mp3, format="mp3")
+        ruta_wav = "audio_recibido.wav"
+        audio.export(ruta_wav, format="wav")
+
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(ruta_wav) as source:
+            audio_data = recognizer.record(source)
+            texto = recognizer.recognize_google(audio_data, language="es-EN")
+        
+        return texto
+
+    except Exception as e:
+        print(f"❌ Error en la transcripción: {e}")
+        return "No se pudo procesar la nota de voz."
+
 
 def responder_chatgpt(mensaje):
     print(f"📩 Mensaje recibido: {mensaje}")  # Depuración
