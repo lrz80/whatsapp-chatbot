@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, Form
 import openai
 import requests
 import subprocess
+import whisper
 from twilio.twiml.messaging_response import MessagingResponse
 from fastapi.responses import Response
 from fastapi import FastAPI
@@ -20,6 +21,16 @@ from langdetect import detect
 from pydub import AudioSegment
 import speech_recognition as sr
 import aiofiles  # Para manejar archivos de manera asíncrona
+
+# 🔹 CONFIGURACIÓN: Reemplaza con tus credenciales de Twilio si es necesario
+TWILIO_AUTH = ("TU_ACCOUNT_SID", "TU_AUTH_TOKEN")  # Si Twilio requiere autenticación
+
+# 🔹 URL DEL AUDIO QUE VIENE DE TWILIO
+url_twilio = "https://api.twilio.com/2010-04-01/Accounts/XXX/Messages/YYY/Media/ZZZ"
+
+# 🔹 Nombres de los archivos locales
+archivo_mp3 = "audio_recibido.mp3"
+archivo_wav = "audio_recibido.wav"
 
 # Configurar el path de ffmpeg para pydub
 os.environ["FFMPEG_EXECUTABLE"] = "C:\\ffmpeg\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg.exe"
@@ -76,97 +87,85 @@ def dividir_mensaje(mensaje, limite=1300):
     partes.append(mensaje)  # Agregar la última parte
     return partes
 
-def transcribir_audio(url_audio):
+### 🌟 FUNCIÓN PARA CONVERTIR EL AUDIO A WAV 🌟 ###
+def convertir_audio(ruta_mp3, ruta_wav):
+    """ Convierte el archivo MP3 a WAV usando FFmpeg. """
     try:
-        print(f"📥 Descargando archivo desde: {url_audio}")
+        if not os.path.exists(ruta_mp3):
+            print("❌ No se encontró el archivo MP3. No se puede convertir.")
+            return None
 
-        # Descargar el archivo de audio desde Twilio
-        response = requests.get(url_audio, stream=True)
-        if response.status_code != 200:
-            raise Exception(f"Error al descargar el audio. Código HTTP: {response.status_code}")
+        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
+        subprocess.run(comando, shell=True, check=True)
+        print(f"✔ Conversión exitosa: {ruta_wav}")
+        return ruta_wav
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error en la conversión de audio: {e}")
+        return None
 
-        # Guardar el archivo como MP3
-        ruta_mp3 = "audio_recibido.mp3"
-        with open(ruta_mp3, "wb") as file:
-            for chunk in response.iter_content(chunk_size=1024):
-                file.write(chunk)
+### 🌟 FUNCIÓN PARA TRANSCRIBIR EL AUDIO 🌟 ###
+def transcribir_audio(ruta_wav):
+    """ Transcribe el audio usando Whisper. """
+    try:
+        if not os.path.exists(ruta_wav):
+            print("❌ No se encontró el archivo WAV. No se puede transcribir.")
+            return None
 
-        # Verificar que el archivo se guardó correctamente
-        if not os.path.exists(ruta_mp3) or os.path.getsize(ruta_mp3) == 0:
-            raise Exception("El archivo MP3 no se descargó correctamente o está vacío.")
-
-        print(f"✅ Audio guardado correctamente: {ruta_mp3}")
-
-        # Convertir a WAV compatible con Whisper
-        ruta_wav = "audio_recibido.wav"
-        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav} -y"
-        resultado = subprocess.run(comando, shell=True, capture_output=True, text=True)
-
-        # Verificar si la conversión fue exitosa
-        if resultado.returncode != 0:
-            raise Exception(f"Error en la conversión con FFmpeg: {resultado.stderr}")
-
-        print(f"✅ Conversión completada: {ruta_wav}")
-
-        # Transcribir el audio (usando Whisper API de OpenAI)
-        import openai
-        with open(ruta_wav, "rb") as audio_file:
-            respuesta = openai.Audio.transcribe("whisper-1", audio_file)
-
-        # Eliminar archivos temporales
-        os.remove(ruta_mp3)
-        os.remove(ruta_wav)
-
-        return respuesta.get("text", "")
-
+        model = whisper.load_model("base")
+        resultado = model.transcribe(ruta_wav)
+        print(f"✔ Transcripción: {resultado['text']}")
+        return resultado['text']
     except Exception as e:
         print(f"❌ Error en la transcripción: {e}")
-        return "No se pudo procesar la nota de voz."
+        return None
 
     
-def descargar_audio(url_audio):
-    """ Descarga un archivo de audio desde Twilio con autenticación """
+### 🌟 FUNCIÓN PARA DESCARGAR EL AUDIO DESDE TWILIO 🌟 ###
+def descargar_audio(url, nombre_archivo):
+    """ Descarga el archivo de audio desde Twilio y lo guarda localmente. """
     try:
-        print(f"🔗 Intentando descargar: {url_audio}")
+        headers = {
+            "Authorization": "Basic TU_API_KEY"  # Si Twilio requiere autenticación
+        }
+        respuesta = requests.get(url, headers=headers)
 
-        # Validar si la URL es correcta
-        if not url_audio.startswith("http"):
-            print(f"❌ URL inválida: {url_audio}")
-            return None
-
-        # Verificar que las credenciales no estén vacías
-        if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
-            print("❌ ERROR: Credenciales de Twilio no definidas.")
-            return None
-
-        # Realizar la solicitud con autenticación
-        response = requests.get(url_audio, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), stream=True)
-
-        if response.status_code == 401:
-            print("❌ ERROR: Autenticación fallida (HTTP 401). Verifica las credenciales de Twilio.")
-            return None
-        elif response.status_code != 200:
-            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
-            return None
-
-        # Guardar el archivo
-        ruta_mp3 = "audio_recibido.mp3"
-        with open(ruta_mp3, "wb") as file:
-            file.write(response.content)
-            print(f"Tamaño del archivo descargado: {os.path.getsize(ruta_mp3)} bytes")
-
-
-        # Verificar que el archivo fue guardado correctamente
-        if os.path.exists(ruta_mp3) and os.path.getsize(ruta_mp3) > 0:
-            print(f"✅ Audio guardado correctamente: {ruta_mp3}")
-            return ruta_mp3
+        if respuesta.status_code == 200:
+            with open(nombre_archivo, "wb") as archivo:
+                archivo.write(respuesta.content)
+            print(f"✔ Archivo descargado correctamente: {nombre_archivo}")
+            return nombre_archivo
         else:
-            print("❌ ERROR: No se pudo guardar el audio.")
+            print(f"❌ Error al descargar el audio. Código HTTP: {respuesta.status_code}")
             return None
-
     except Exception as e:
-        print(f"❌ ERROR en descarga de audio: {e}")
+        print(f"❌ Excepción al descargar el audio: {str(e)}")
         return None
+    
+### 🌟 FLUJO COMPLETO DEL PROCESO 🌟 ###
+print("🔹 Iniciando procesamiento de audio...")
+
+# 1️⃣ DESCARGAR EL AUDIO DESDE TWILIO
+archivo_descargado = descargar_audio(url_twilio, archivo_mp3)
+
+if archivo_descargado:
+    # 2️⃣ CONVERTIR A WAV
+    archivo_convertido = convertir_audio(archivo_mp3, archivo_wav)
+
+    if archivo_convertido:
+        # 3️⃣ TRANSCRIBIR EL AUDIO
+        transcripcion = transcribir_audio(archivo_wav)
+
+        if transcripcion:
+            print(f"✅ Transcripción Final: {transcripcion}")
+        else:
+            print("❌ Error en la transcripción.")
+    else:
+        print("❌ Error en la conversión de audio.")
+else:
+    print("❌ Error en la descarga del audio.")
+
+print("🔹 Proceso completado.")
+
     
 ruta_mp3 = "audio_recibido.mp3"  # Cambia a la ruta correcta si es necesario
 
