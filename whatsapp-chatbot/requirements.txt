@@ -8,3 +8,5 @@ thefuzz
 python-Levenshtein
 langdetect
 pydub
+pydub
+ffmpeg-python
