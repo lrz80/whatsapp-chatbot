@@ -180,13 +180,14 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # 📌 Asegurar que la URL del audio es correcta
+        url_audio = form_data.get("MediaUrl0")  # Asegurar que la URL es correcta
 
         if url_audio:
-            print(f"🎤 Nota de voz recibida: {url_audio}")
-            mensaje = transcribir_audio(url_audio)  # ✅ Sin `await`, ya que ahora es síncrona
-
-            if mensaje:
+            print(f"🔗 Nota de voz recibida: {url_audio}")
+            ruta_audio = descargar_audio(url_audio)  # Usa la función corregida
+            
+            if ruta_audio:
+                mensaje = transcribir_audio(ruta_audio)
                 print(f"📝 Transcripción: {mensaje}")
 
         if not mensaje:
