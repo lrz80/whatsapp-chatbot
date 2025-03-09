@@ -51,19 +51,6 @@ def procesar_audio(audio_url):
         return f"Error procesando audio: {str(e)}"
 
 
-# Función para transcribir audio con OpenAI
-def transcribir_audio(ruta_mp3):
-    try:
-        with open(ruta_mp3, "rb") as audio_file:
-            respuesta = openai.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
-            return respuesta.text  # Devolver la transcripción
-    except Exception as e:
-        print(f"❌ Error en transcripción: {e}")
-        return None
-
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
     mejor_coincidencia, score = process.extractOne(frase_usuario, opciones)
@@ -89,7 +76,7 @@ def dividir_mensaje(mensaje, limite=1300):
     partes.append(mensaje)  # Agregar la última parte
     return partes
 
-async def transcribir_audio(audio_url: str) -> str:
+def transcribir_audio(audio_url: str) -> str:
     """ Descarga y transcribe un archivo de audio usando OpenAI 1.65.0 """
     try:
         # 📥 Descargar el audio desde Twilio
@@ -98,17 +85,17 @@ async def transcribir_audio(audio_url: str) -> str:
             print("❌ Error al descargar el audio.")
             return "Error al descargar el audio."
 
-        # 📂 Guardar el archivo temporalmente
+        # 📂 Guardar el archivo temporalmente en formato MP3
         audio_path = "audio.ogg"
-        async with aiofiles.open(audio_path, "wb") as f:
-            await f.write(response.content)
+        with open(audio_path, "wb") as f:
+            f.write(response.content)
 
         # 🔑 Crear el cliente de OpenAI
         client = openai.Client(api_key=os.getenv("OPENAI_API_KEY"))
 
         # 📝 Enviar el audio a Whisper para transcripción
-        async with aiofiles.open(audio_path, "rb") as audio_file:
-            transcript = await client.audio.transcriptions.create(
+        with open(audio_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
             )
@@ -142,14 +129,13 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # 📌 Detectar si hay un archivo adjunto
+        url_audio = form_data.get("MediaUrl0")  # 📌 Asegurar que la URL del audio es correcta
 
         if url_audio:
             print(f"📥 Nota de voz recibida: {url_audio}")
-            ruta_mp3 = await transcribir_audio(url_audio)  # 🔥 Aquí usamos `await`
+            mensaje = transcribir_audio(url_audio)  # 🔥 No es `await`, porque `transcribir_audio` es función normal
 
-            if ruta_mp3:
-                mensaje = ruta_mp3
+            if mensaje:
                 print(f"📝 Transcripción: {mensaje}")
 
         if not mensaje:
