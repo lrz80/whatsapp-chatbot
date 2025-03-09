@@ -127,15 +127,23 @@ def descargar_audio(url_audio):
     try:
         print(f"🔗 Intentando descargar: {url_audio}")
 
-        # Validar si la URL comienza con http
+        # Validar si la URL es correcta
         if not url_audio.startswith("http"):
             print(f"❌ URL inválida: {url_audio}")
+            return None
+
+        # Verificar que las credenciales no estén vacías
+        if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
+            print("❌ ERROR: Credenciales de Twilio no definidas.")
             return None
 
         # Realizar la solicitud con autenticación
         response = requests.get(url_audio, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), stream=True)
 
-        if response.status_code != 200:
+        if response.status_code == 401:
+            print("❌ ERROR: Autenticación fallida (HTTP 401). Verifica las credenciales de Twilio.")
+            return None
+        elif response.status_code != 200:
             print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
             return None
 
@@ -145,7 +153,7 @@ def descargar_audio(url_audio):
             for chunk in response.iter_content(chunk_size=1024):
                 file.write(chunk)
 
-        # Verificar si se guardó correctamente
+        # Verificar que el archivo fue guardado correctamente
         if os.path.exists(ruta_mp3) and os.path.getsize(ruta_mp3) > 0:
             print(f"✅ Audio guardado correctamente: {ruta_mp3}")
             return ruta_mp3
@@ -180,11 +188,11 @@ async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
         mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # Asegurar que la URL es correcta
+        url_audio = form_data.get("MediaUrl0")  # Usar la clave correcta
 
         if url_audio:
             print(f"🔗 Nota de voz recibida: {url_audio}")
-            ruta_audio = descargar_audio(url_audio)  # Usa la función corregida
+            ruta_audio = descargar_audio(url_audio)  # Descargar con autenticación
             
             if ruta_audio:
                 mensaje = transcribir_audio(ruta_audio)
