@@ -4,38 +4,14 @@ from fastapi import FastAPI, Request, Form
 import openai
 import requests
 from twilio.twiml.messaging_response import MessagingResponse
-from fastapi.responses import Response
-from fastapi import FastAPI
+from fastapi.responses import Response, PlainTextResponse
 from pydantic import BaseModel
-import json
-from fastapi import FastAPI, Request
 from twilio.rest import Client
-from fastapi import FastAPI, Form
-from fastapi.responses import JSONResponse
-from starlette.responses import PlainTextResponse
-from fastapi.responses import PlainTextResponse
 from langdetect import detect
+from dotenv import load_dotenv
 
-def detectar_idioma(mensaje):
-    try:
-        idioma = detect(mensaje)
-        print(f"🔍 Idioma detectado: {idioma}")  # 🔴 Agregamos este log
-        return idioma
-    except:
-        return "es"  # Si hay error, usa español por defecto
-
-def dividir_mensaje(mensaje, limite=1300):
-    """Divide un mensaje largo en partes sin cortar palabras."""
-    partes = []
-    while len(mensaje) > limite:
-        corte = mensaje.rfind("\n", 0, limite)  # Busca un salto de línea antes del límite
-        if corte == -1:
-            corte = limite  # Si no hay salto de línea, corta en el límite exacto
-        partes.append(mensaje[:corte])
-        mensaje = mensaje[corte:].strip()
-    
-    partes.append(mensaje)  # Agrega la última parte
-    return partes
+# Cargar variables de entorno
+load_dotenv()
 
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -54,13 +30,33 @@ app = FastAPI()
 class Message(BaseModel):
     body: str
 
-# 🟢 Webhook de WhatsApp
+def detectar_idioma(mensaje):
+    try:
+        idioma = detect(mensaje)
+        print(f"🔍 Idioma detectado: {idioma}")
+        return idioma if idioma in ["es", "en"] else "es"
+    except:
+        return "es"
+
+def dividir_mensaje(mensaje, limite=1300):
+    """Divide un mensaje largo en partes sin cortar palabras."""
+    partes = []
+    while len(mensaje) > limite:
+        corte = mensaje.rfind("\n", 0, limite)  
+        if corte == -1:
+            corte = limite  
+        partes.append(mensaje[:corte])
+        mensaje = mensaje[corte:].strip()
+    
+    partes.append(mensaje)  
+    return partes
+
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        form_data = await request.form()  # Leer los datos del formulario
-        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje
-        numero = form_data.get("From", "").strip()  # Número de teléfono del usuario
+        form_data = await request.form()  
+        mensaje = form_data.get("Body", "").strip()  
+        numero = form_data.get("From", "").strip()  
 
         if not mensaje:
             return PlainTextResponse("Mensaje vacío", status_code=400)
@@ -72,43 +68,37 @@ async def whatsapp_webhook(request: Request):
 
         print(f"💬 Respuesta generada: {respuesta}")
 
-        # Dividir la respuesta si es demasiado larga
+        # Dividir y enviar la respuesta en partes
         partes_respuesta = dividir_mensaje(respuesta)
+        for parte in partes_respuesta:
+            twilio_client.messages.create(
+                body=parte,
+                from_=TWILIO_PHONE_NUMBER,
+                to=numero
+            )
 
-        # Unir todas las partes en una respuesta
-        respuesta_final = "\n\n".join(partes_respuesta)
-
-        # Convertir a texto plano y eliminar caracteres problemáticos
-        respuesta_final = str(respuesta).encode("utf-8", "ignore").decode("utf-8")
-        partes_respuesta = dividir_mensaje(respuesta_final)  # Asegurar que no supere los 1600 caracteres
-
-        # Enviar la respuesta corregida
-        return PlainTextResponse("\n\n".join(partes_respuesta), status_code=200)
-
-
+        return PlainTextResponse("Mensaje enviado correctamente", status_code=200)
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
         return PlainTextResponse("Error interno del servidor", status_code=500)
 
 def responder_chatgpt(mensaje):
-    print(f"📩 Mensaje recibido: {mensaje}")  # Depuración
+    print(f"📩 Mensaje recibido: {mensaje}")  
 
-    client = openai.Client()
-
-    # Pedir a OpenAI que detecte el idioma del usuario directamente
+    # Detectar idioma
     prompt_detectar_idioma = f"Detecta el idioma de este mensaje y responde solo con 'es' o 'en': {mensaje}"
     
-    respuesta_idioma = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": prompt_detectar_idioma}]
-)
+    respuesta_idioma = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt_detectar_idioma}]
+    )
 
-    idioma_usuario = respuesta_idioma.choices[0].message.content.strip().lower()
-    print(f"🔍 Idioma detectado por OpenAI: {idioma_usuario}")  # Depuración
+    idioma_usuario = respuesta_idioma["choices"][0]["message"]["content"].strip().lower()
+    print(f"🔍 Idioma detectado por OpenAI: {idioma_usuario}")  
 
-    # PROMPTS en ambos idiomas
-    prompt_negocio = {
+    # PROMPTS
+    prompts = {
         "es": """Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.
     Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación.
     Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.
@@ -154,7 +144,6 @@ def responder_chatgpt(mensaje):
     Si necesitas más información o quieres hablar con un asesor, puedes llamar o escribir al WhatsApp (863)317-1646.
 
     Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto.""",
-
         "en": """You are a virtual assistant specialized in Spinzone Indoor Cycling, a center focused on indoor cycling classes and Functional Training classes. 
     Your goal is to provide detailed and accurate information about Spinzone, including schedules, prices, and location.
     Respond in a clear, friendly, and professional manner. Automatically detect the user's language and reply in the same language.
@@ -200,17 +189,12 @@ def responder_chatgpt(mensaje):
     If you need more information or wish to speak with a representative, you can call or message us on WhatsApp at (863)317-1646.
 
     Always provide this information when someone asks about Spinzone Indoor Cycling. If the user asks a question outside of these topics, try to redirect them to the WhatsApp contact."""
-}
+    }
 
-    # Usar el idioma detectado o español por defecto si hay error
-    prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
-    print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  # Depuración
+    prompt_seleccionado = prompts.get(idioma_usuario, prompts["es"])
+    print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  
 
-    mensaje_clave = mensaje  # 🔹 Asegurar que siempre tenga un valor
-
-    print(f"Mensaje clave: {mensaje_clave}")  # 🔹 Depuración
-
-    respuesta = client.chat.completions.create(
+    respuesta = openai.ChatCompletion.create(
         model="gpt-4",
         temperature=0.4,
         max_tokens=1500,
@@ -220,36 +204,12 @@ def responder_chatgpt(mensaje):
         ]
     )
 
-    # Obtener la respuesta del asistente
-    mensaje_respuesta = respuesta.choices[0].message.content
-    print(f"💬 Respuesta generada: {mensaje_respuesta}")  # 🔴 Depuración
+    if "choices" in respuesta and respuesta["choices"]:
+        return respuesta["choices"][0]["message"]["content"]
+    else:
+        return "Lo siento, no pude procesar tu solicitud en este momento."
 
-    return mensaje_respuesta
-
-def analizar_imagen(url_imagen):
-    client = openai.Client()
-    respuesta = client.chat.completions.create(
-        model="gpt-4-vision-preview",
-        messages=[
-            {"role": "system", "content": "Describe la imagen en detalle."},
-            {"role": "user", "content": {"image": url_imagen}}
-        ]
-    )
-
-    return respuesta.choices[0].message.content
-
-# 🔵 Función para procesar imágenes con GPT-4 Vision
-def analizar_imagen(url_imagen):
-    respuesta = openai.ChatCompletion.create(
-        model="gpt-4-vision-preview",
-        messages=[
-            {"role": "system", "content": "Describe la imagen de forma detallada."},
-            {"role": "user", "content": {"image": url_imagen}}
-        ]
-    )
-    return respuesta["choices"][0]["message"]["content"]
-
-# 🔴 Función para transcribir notas de voz con Whisper
+# 🔴 Transcripción de audio con Whisper
 @app.post("/transcribir_audio")
 async def transcribir_audio(url_audio: str):
     audio_data = requests.get(url_audio).content
@@ -261,7 +221,6 @@ async def transcribir_audio(url_audio: str):
     
     return {"texto_transcrito": transcript["text"]}
 
-# Obtener el puerto desde las variables de entorno de Railway
 PORT = int(os.environ.get("PORT", 8000))
 
 if __name__ == "__main__":
