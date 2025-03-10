@@ -3,64 +3,18 @@ import os
 from fastapi import FastAPI, Request, Form
 import openai
 import requests
-import subprocess
-import whisper
 from twilio.twiml.messaging_response import MessagingResponse
 from fastapi.responses import Response
 from fastapi import FastAPI
 from pydantic import BaseModel
 import json
 from fastapi import FastAPI, Request
-from thefuzz import process
 from twilio.rest import Client
 from fastapi import FastAPI, Form
 from fastapi.responses import JSONResponse
 from starlette.responses import PlainTextResponse
 from fastapi.responses import PlainTextResponse
 from langdetect import detect
-from pydub import AudioSegment
-import speech_recognition as sr
-import aiofiles  # Para manejar archivos de manera asíncrona
-
-# 🔹 CONFIGURACIÓN: Reemplaza con tus credenciales de Twilio si es necesario
-TWILIO_AUTH = ("TU_ACCOUNT_SID", "TU_AUTH_TOKEN")  # Si Twilio requiere autenticación
-
-# 🔹 URL DEL AUDIO QUE VIENE DE TWILIO
-url_twilio = "https://api.twilio.com/2010-04-01/Accounts/XXX/Messages/YYY/Media/ZZZ"
-
-# 🔹 Nombres de los archivos locales
-archivo_mp3 = "audio_recibido.mp3"
-archivo_wav = "audio_recibido.wav"
-
-# Configurar el path de ffmpeg para pydub
-os.environ["FFMPEG_EXECUTABLE"] = "C:\\ffmpeg\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg.exe"
-
-def procesar_audio(url_audio):
-    try:
-        response = requests.get(url_audio)
-        if response.status_code != 200:
-            print(f"❌ Error al descargar el audio. Código HTTP: {response.status_code}")
-            return None
-
-        ruta_mp3 = "audio_recibido.mp3"
-        with open(ruta_mp3, "wb") as file:
-            file.write(response.content)
-        
-        print(f"✅ Audio guardado correctamente: {ruta_mp3}")
-
-        # Convertir el audio a WAV (PCM 16-bit, 16kHz) usando FFmpeg
-        ruta_wav = "audio_recibido.wav"
-        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
-        subprocess.run(comando, shell=True, check=True)
-        
-        print(f"✅ Audio convertido a WAV: {ruta_wav}")
-
-        return ruta_wav  # Retorna la nueva ruta del archivo WAV
-
-    except Exception as e:
-        print(f"❌ Error en el procesamiento del audio: {e}")
-        return None
-
 
 def es_similar(frase_usuario, opciones, umbral=70):
     """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
@@ -76,106 +30,18 @@ def detectar_idioma(mensaje):
         return "es"  # Si hay error, usa español por defecto
 
 def dividir_mensaje(mensaje, limite=1300):
-    """Divide un mensaje largo en partes más pequeñas sin cortar palabras."""
+    """Divide un mensaje largo en partes sin cortar palabras."""
     partes = []
     while len(mensaje) > limite:
-        corte = mensaje[:limite].rfind(" ")  # Buscar espacio antes del límite
+        corte = mensaje.rfind("\n", 0, limite)  # Busca un salto de línea antes del límite
         if corte == -1:
-            corte = limite  # Si no hay espacio, cortar en el límite exacto
+            corte = limite  # Si no hay salto de línea, corta en el límite exacto
         partes.append(mensaje[:corte])
         mensaje = mensaje[corte:].strip()
-    partes.append(mensaje)  # Agregar la última parte
+    
+    partes.append(mensaje)  # Agrega la última parte
     return partes
 
-### 🌟 FUNCIÓN PARA CONVERTIR EL AUDIO A WAV 🌟 ###
-def convertir_audio(ruta_mp3, ruta_wav):
-    """ Convierte el archivo MP3 a WAV usando FFmpeg. """
-    try:
-        if not os.path.exists(ruta_mp3):
-            print("❌ No se encontró el archivo MP3. No se puede convertir.")
-            return None
-
-        comando = f"ffmpeg -i {ruta_mp3} -acodec pcm_s16le -ar 16000 {ruta_wav}"
-        subprocess.run(comando, shell=True, check=True)
-        print(f"✔ Conversión exitosa: {ruta_wav}")
-        return ruta_wav
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error en la conversión de audio: {e}")
-        return None
-
-### 🌟 FUNCIÓN PARA TRANSCRIBIR EL AUDIO 🌟 ###
-def transcribir_audio(ruta_wav):
-    """ Transcribe el audio usando Whisper. """
-    try:
-        if not os.path.exists(ruta_wav):
-            print("❌ No se encontró el archivo WAV. No se puede transcribir.")
-            return None
-
-        model = whisper.load_model("base")
-        resultado = model.transcribe(ruta_wav)
-        print(f"✔ Transcripción: {resultado['text']}")
-        return resultado['text']
-    except Exception as e:
-        print(f"❌ Error en la transcripción: {e}")
-        return None
-
-    
-### 🌟 FUNCIÓN PARA DESCARGAR EL AUDIO DESDE TWILIO 🌟 ###
-def descargar_audio(url, nombre_archivo):
-    """ Descarga el archivo de audio desde Twilio y lo guarda localmente. """
-    try:
-        headers = {
-            "Authorization": "Basic TU_API_KEY"  # Si Twilio requiere autenticación
-        }
-        respuesta = requests.get(url, headers=headers)
-
-        if respuesta.status_code == 200:
-            with open(nombre_archivo, "wb") as archivo:
-                archivo.write(respuesta.content)
-            print(f"✔ Archivo descargado correctamente: {nombre_archivo}")
-            return nombre_archivo
-        else:
-            print(f"❌ Error al descargar el audio. Código HTTP: {respuesta.status_code}")
-            return None
-    except Exception as e:
-        print(f"❌ Excepción al descargar el audio: {str(e)}")
-        return None
-    
-### 🌟 FLUJO COMPLETO DEL PROCESO 🌟 ###
-print("🔹 Iniciando procesamiento de audio...")
-
-# 1️⃣ DESCARGAR EL AUDIO DESDE TWILIO
-archivo_descargado = descargar_audio(url_twilio, archivo_mp3)
-
-if archivo_descargado:
-    # 2️⃣ CONVERTIR A WAV
-    archivo_convertido = convertir_audio(archivo_mp3, archivo_wav)
-
-    if archivo_convertido:
-        # 3️⃣ TRANSCRIBIR EL AUDIO
-        transcripcion = transcribir_audio(archivo_wav)
-
-        if transcripcion:
-            print(f"✅ Transcripción Final: {transcripcion}")
-        else:
-            print("❌ Error en la transcripción.")
-    else:
-        print("❌ Error en la conversión de audio.")
-else:
-    print("❌ Error en la descarga del audio.")
-
-print("🔹 Proceso completado.")
-
-    
-ruta_mp3 = "audio_recibido.mp3"  # Cambia a la ruta correcta si es necesario
-
-if not os.path.exists(ruta_mp3):
-    print("⚠️ Error: El archivo MP3 no se creó. Falló la descarga.")
-elif os.path.getsize(ruta_mp3) == 0:
-    print("⚠️ Error: El archivo MP3 está vacío. Revisa la descarga.")
-else:
-    print("✅ Archivo descargado correctamente:", ruta_mp3)
-    
 # Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -197,60 +63,38 @@ class Message(BaseModel):
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
-        form_data = await request.form()
-        mensaje = form_data.get("Body", "").strip()
-        url_audio = form_data.get("MediaUrl0")  # Twilio envía el audio aquí
-
-        if url_audio:
-            print(f"🎤 Nota de voz recibida: {url_audio}")
-            mensaje = transcribir_audio(url_audio)  # Llamar la función corregida
-
-            if mensaje:
-                print(f"📝 Transcripción: {mensaje}")
+        form_data = await request.form()  # Leer los datos del formulario
+        mensaje = form_data.get("Body", "").strip()  # Extraer el mensaje
+        numero = form_data.get("From", "").strip()  # Número de teléfono del usuario
 
         if not mensaje:
             return PlainTextResponse("Mensaje vacío", status_code=400)
 
+        print(f"📩 Mensaje recibido: {mensaje} de {numero}")
+
+        # Llamamos a la función para procesar el mensaje con GPT
         respuesta = responder_chatgpt(mensaje)
-        return PlainTextResponse(respuesta, status_code=200)
+
+        print(f"💬 Respuesta generada: {respuesta}")
+
+        # Dividir la respuesta si es demasiado larga
+        partes_respuesta = dividir_mensaje(respuesta)
+
+        # Unir todas las partes en una respuesta
+        respuesta_final = "\n\n".join(partes_respuesta)
+
+        # Convertir a texto plano y eliminar caracteres problemáticos
+        respuesta_final = str(respuesta).encode("utf-8", "ignore").decode("utf-8")
+        partes_respuesta = dividir_mensaje(respuesta_final)  # Asegurar que no supere los 1600 caracteres
+
+        # Enviar la respuesta corregida
+        return PlainTextResponse("\n\n".join(partes_respuesta), status_code=200)
+
+
 
     except Exception as e:
         print(f"❌ Error procesando datos: {e}")
         return PlainTextResponse("Error interno del servidor", status_code=500)
-    
-# Función para procesar el audio recibido
-def procesar_audio(url_audio):
-    try:
-        response = requests.get(url_audio)
-        ruta_mp3 = "audio_recibido.mp3"
-
-        with open(ruta_mp3, "wb") as file:
-            file.write(response.content)
-
-        return ruta_mp3
-
-    except Exception as e:
-        print(f"❌ Error al descargar el audio: {e}")
-        return None
-
-# Función para transcribir el audio
-def transcribir_audio(ruta_mp3):
-    try:
-        audio = AudioSegment.from_file(ruta_mp3, format="mp3")
-        ruta_wav = "audio_recibido.wav"
-        audio.export(ruta_wav, format="wav")
-
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(ruta_wav) as source:
-            audio_data = recognizer.record(source)
-            texto = recognizer.recognize_google(audio_data, language="es-EN")
-        
-        return texto
-
-    except Exception as e:
-        print(f"❌ Error en la transcripción: {e}")
-        return "No se pudo procesar la nota de voz."
-
 
 def responder_chatgpt(mensaje):
     print(f"📩 Mensaje recibido: {mensaje}")  # Depuración
@@ -421,6 +265,18 @@ def analizar_imagen(url_imagen):
         ]
     )
     return respuesta["choices"][0]["message"]["content"]
+
+# 🔴 Función para transcribir notas de voz con Whisper
+@app.post("/transcribir_audio")
+async def transcribir_audio(url_audio: str):
+    audio_data = requests.get(url_audio).content
+    with open("audio.ogg", "wb") as f:
+        f.write(audio_data)
+
+    audio_file = open("audio.ogg", "rb")
+    transcript = openai.Audio.transcribe("whisper-1", audio_file)
+    
+    return {"texto_transcrito": transcript["text"]}
 
 # Obtener el puerto desde las variables de entorno de Railway
 PORT = int(os.environ.get("PORT", 8000))

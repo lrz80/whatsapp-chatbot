@@ -1,13 +1,8 @@
-openai==1.64.0
 fastapi
 uvicorn
-twilio
 requests
-python-multipart
-thefuzz
-python-Levenshtein
-langdetect
-pydub
 ffmpeg-python
-speechrecognition
-aiofiles
+numpy
+torch
+pydantic
+python-dotenv
