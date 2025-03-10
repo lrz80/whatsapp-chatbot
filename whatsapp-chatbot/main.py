@@ -16,11 +16,6 @@ from starlette.responses import PlainTextResponse
 from fastapi.responses import PlainTextResponse
 from langdetect import detect
 
-def es_similar(frase_usuario, opciones, umbral=70):
-    """Compara el mensaje del usuario con una lista de opciones y devuelve True si es similar."""
-    mejor_coincidencia, score = process.extractOne(frase_usuario, opciones)
-    return mejor_coincidencia if score >= umbral else None
-
 def detectar_idioma(mensaje):
     try:
         idioma = detect(mensaje)
