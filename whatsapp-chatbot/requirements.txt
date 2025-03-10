@@ -7,3 +7,4 @@ torch
 pydantic
 python-dotenv
 openai
+twilio
