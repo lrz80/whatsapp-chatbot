@@ -206,19 +206,7 @@ def responder_chatgpt(mensaje):
     prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
     print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  # Depuración
 
-    # 🔹 Definir palabras clave con fuzzy matching
-    opciones_horario = ["horario", "horarios", "qué horario tienen?", "dime los horarios"]
-    opciones_precios = ["precios", "cuánto cuesta", "planes", "tarifas", "costos"]
-    opciones_info = ["información", "quiero información", "dame más información", "cuéntame sobre spinzone"]
-
     mensaje_clave = mensaje  # 🔹 Asegurar que siempre tenga un valor
-
-    if es_similar(mensaje.lower(), opciones_horario):
-        mensaje_clave = "Dime los horarios de Spinzone Indoor Cycling."
-    elif es_similar(mensaje.lower(), opciones_precios):
-        mensaje_clave = "Dime los precios de Spinzone Indoor Cycling."
-    elif es_similar(mensaje.lower(), opciones_info):
-        mensaje_clave = "Dame información general sobre Spinzone Indoor Cycling."
 
     print(f"Mensaje clave: {mensaje_clave}")  # 🔹 Depuración
 
