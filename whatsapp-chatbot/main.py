@@ -83,19 +83,20 @@ async def whatsapp_webhook(request: Request):
         print(f"❌ Error procesando datos: {e}")
         return PlainTextResponse("Error interno del servidor", status_code=500)
 
+# Usa directamente la API sin inicializar 'client'
 def responder_chatgpt(mensaje):
-    print(f"📩 Mensaje recibido: {mensaje}")  
+    print(f"📩 Mensaje recibido: {mensaje}")  # Depuración
 
-    # Detectar idioma
+    # Pedir a OpenAI que detecte el idioma del usuario directamente
     prompt_detectar_idioma = f"Detecta el idioma de este mensaje y responde solo con 'es' o 'en': {mensaje}"
     
-    respuesta_idioma = openai.ChatCompletion.create(
+    respuesta_idioma = openai.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt_detectar_idioma}]
     )
 
-    idioma_usuario = respuesta_idioma["choices"][0]["message"]["content"].strip().lower()
-    print(f"🔍 Idioma detectado por OpenAI: {idioma_usuario}")  
+    idioma_usuario = respuesta_idioma.choices[0].message.content.strip().lower()
+    print(f"🔍 Idioma detectado por OpenAI: {idioma_usuario}")  # Depuración
 
     # PROMPTS
     prompts = {
@@ -194,7 +195,7 @@ def responder_chatgpt(mensaje):
     prompt_seleccionado = prompts.get(idioma_usuario, prompts["es"])
     print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  
 
-    respuesta = openai.ChatCompletion.create(
+    openai.chat.completions.create(
         model="gpt-4",
         temperature=0.4,
         max_tokens=1500,
