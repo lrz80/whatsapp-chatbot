@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+requests
+ffmpeg-python
+numpy
+torch
+pydantic
+python-dotenv
+openai
+twilio
+langdetect
+python-multipart
+aiohttp
