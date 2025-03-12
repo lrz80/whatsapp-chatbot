@@ -6,6 +6,7 @@ import asyncio
 import aiohttp
 import tempfile
 import openai
+import undetected_chromedriver as uc
 from fastapi import FastAPI, Request
 from openai import OpenAI
 from twilio.twiml.messaging_response import MessagingResponse
@@ -20,6 +21,7 @@ from selenium.webdriver.chrome.options import Options
 import json
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Cargar variables de entorno
 load_dotenv()
@@ -162,25 +164,19 @@ def detectar_idioma(mensaje):
 # Función para manejar reservas/cancelaciones en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
-        print("🔹 Instalando Chrome y Chromedriver en Railway...")
-
-        os.system("apt-get update")
-        os.system("apt-get install -y wget unzip")
-        os.system("wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
-        os.system("dpkg -i google-chrome-stable_current_amd64.deb || apt-get -fy install")
-        os.system("wget https://chromedriver.storage.googleapis.com/134.0.6093.71/chromedriver_linux64.zip")
-        os.system("unzip chromedriver_linux64.zip")
-        os.system("mv chromedriver /usr/local/bin/")
-
-        print("✅ Chrome y Chromedriver instalados correctamente.")
+        print("🔹 Configurando Selenium con webdriver-manager...")
 
         chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Modo sin interfaz
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        service = Service("/usr/local/bin/chromedriver")
+        # Usar webdriver-manager para manejar Chrome y Chromedriver automáticamente
+        service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        print("✅ Selenium configurado correctamente.")
 
         driver.get("https://app.glofox.com/portal/#/login")
         print("🔹 Iniciando sesión en Glofox...")
