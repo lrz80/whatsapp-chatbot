@@ -19,6 +19,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 import json
 from oauth2client.service_account import ServiceAccountCredentials
+from selenium.webdriver.chrome.service import Service
 
 # Cargar variables de entorno
 load_dotenv()
@@ -161,29 +162,41 @@ def detectar_idioma(mensaje):
 # Función para manejar reservas/cancelaciones en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
-        options = Options()
-        options.add_argument("--headless")  
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
+        print("🔹 Instalando Chrome y Chromedriver en Railway...")
 
-        driver = webdriver.Chrome(options=options)
+        os.system("apt-get update")
+        os.system("apt-get install -y wget unzip")
+        os.system("wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
+        os.system("dpkg -i google-chrome-stable_current_amd64.deb || apt-get -fy install")
+        os.system("wget https://chromedriver.storage.googleapis.com/134.0.6093.71/chromedriver_linux64.zip")
+        os.system("unzip chromedriver_linux64.zip")
+        os.system("mv chromedriver /usr/local/bin/")
+
+        print("✅ Chrome y Chromedriver instalados correctamente.")
+
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")  # Modo sin interfaz
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        service = Service("/usr/local/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
         driver.get("https://app.glofox.com/portal/#/login")
-
         print("🔹 Iniciando sesión en Glofox...")
 
-        driver.find_element(By.ID, "email").send_keys("tu_email@example.com")
-        driver.find_element(By.ID, "password").send_keys("tu_contraseña")
-        driver.find_element(By.ID, "login-button").click()
+        driver.find_element("id", "email").send_keys("tu_email@example.com")
+        driver.find_element("id", "password").send_keys("tu_contraseña")
+        driver.find_element("id", "login-button").click()
         time.sleep(3)
 
         if accion == "reservar":
             print(f"🔹 Buscando la clase para {fecha} a las {hora}...")
-
             driver.get("https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view")
             time.sleep(2)
 
             try:
-                boton_clase = driver.find_element(By.XPATH, "//button[contains(text(), 'Indoor Cycling')]")
+                boton_clase = driver.find_element("xpath", "//button[contains(text(), 'Indoor Cycling')]")
                 boton_clase.click()
                 print("✅ Clase encontrada y seleccionada.")
             except Exception as e:
@@ -191,14 +204,14 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
                 driver.quit()
                 return "No se pudo encontrar la clase en Glofox."
 
-            driver.find_element(By.XPATH, "//input[@name='date']").send_keys(fecha)
-            driver.find_element(By.XPATH, "//input[@name='time']").send_keys(hora)
-            driver.find_element(By.XPATH, "//input[@name='name']").send_keys(nombre)
-            driver.find_element(By.XPATH, "//input[@name='email']").send_keys(email)
-            driver.find_element(By.XPATH, "//input[@name='phone']").send_keys(numero)
+            driver.find_element("xpath", "//input[@name='date']").send_keys(fecha)
+            driver.find_element("xpath", "//input[@name='time']").send_keys(hora)
+            driver.find_element("xpath", "//input[@name='name']").send_keys(nombre)
+            driver.find_element("xpath", "//input[@name='email']").send_keys(email)
+            driver.find_element("xpath", "//input[@name='phone']").send_keys(numero)
 
             try:
-                boton_reserva = driver.find_element(By.XPATH, "//button[contains(text(), 'Reservar')]")
+                boton_reserva = driver.find_element("xpath", "//button[contains(text(), 'Reservar')]")
                 boton_reserva.click()
                 print("✅ Reserva realizada correctamente.")
             except Exception as e:
@@ -208,7 +221,6 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
 
             time.sleep(3)
             mensaje = f"✅ ¡Hola {nombre}! Tu clase de Indoor Cycling está confirmada para el {fecha} a las {hora}. 🚴‍♂️🔥"
-            sh.append_row(["Reserva", nombre, email, fecha, hora, numero])
 
         driver.quit()
         return mensaje
