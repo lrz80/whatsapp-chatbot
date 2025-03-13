@@ -14,4 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN chmod +x entrypoint.sh
 
 # Definir el entrypoint
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]
+
