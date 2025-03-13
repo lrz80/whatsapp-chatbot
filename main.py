@@ -35,6 +35,10 @@ from email_helper import obtener_codigo_glofox
 # Cargar variables de entorno
 load_dotenv()
 
+# Instalar la versión compatible de ChromeDriver
+service = Service(ChromeDriverManager(version="114.0.5735.90").install())  # Especifica una versión compatible
+driver = webdriver.Chrome(service=service)
+
 # Cargar credenciales desde una variable de entorno en lugar de un archivo
 google_credentials = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
 
