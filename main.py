@@ -7,6 +7,7 @@ import aiohttp
 import tempfile
 import openai
 import undetected_chromedriver as uc
+from starlette.requests import ClientDisconnect
 from fastapi import FastAPI, Request
 from openai import OpenAI
 from twilio.twiml.messaging_response import MessagingResponse
@@ -232,94 +233,103 @@ async def recibir_reserva(request: ReservaRequest):
 
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
-    form_data = await request.form()
-    mensaje = form_data.get("Body", "").strip().lower()
-    numero = form_data.get("From", "").strip()
+    try:
+        form_data = await request.form()
+        mensaje = form_data.get("Body", "").strip().lower()
+        numero = form_data.get("From", "").strip()
 
-    if not numero.startswith("whatsapp:"):
-        numero = f"whatsapp:{numero}"
+        if not numero.startswith("whatsapp:"):
+            numero = f"whatsapp:{numero}"
 
-    print(f"📨 Mensaje recibido: {mensaje} de {numero}")
+        print(f"📨 Mensaje recibido: {mensaje} de {numero}")
 
-    # 🔍 Detectar si es una reserva
-    if any(palabra in mensaje for palabra in ["reservar", "agendar", "quiero reservar", "quiero agendar"]):
-        partes = mensaje.split()
+        # 🔍 Detectar si es una reserva
+        if any(palabra in mensaje for palabra in ["reservar", "agendar", "quiero reservar", "quiero agendar"]):
+            partes = mensaje.split()
 
-        if len(partes) < 6:
+            if len(partes) < 6:
+                twilio_client.messages.create(
+                    from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+                    to=numero,
+                    body="📅 Para reservar, envía: 'Reservar Nombre Apellido Email Fecha Hora'. Ejemplo: 'Reservar Juan Pérez juan@email.com 2024-03-25 18:00'."
+                )
+                return PlainTextResponse("", status_code=200)
+
+            # Extraer datos
+            nombre = partes[1] + " " + partes[2]  
+            email = partes[3]
+            fecha = partes[4]
+            hora = partes[5]
+
+            print(f"🔹 Procesando reserva: {nombre}, {email}, {fecha}, {hora}")
+
+            # Llamar a la función de reserva en Glofox
+            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "reservar")
+
+            # Enviar confirmación
             twilio_client.messages.create(
                 from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
                 to=numero,
-                body="📅 Para reservar, envía: 'Reservar Nombre Apellido Email Fecha Hora'. Ejemplo: 'Reservar Juan Pérez juan@email.com 2024-03-25 18:00'."
+                body=resultado
             )
             return PlainTextResponse("", status_code=200)
 
-        # Extraer datos
-        nombre = partes[1] + " " + partes[2]  
-        email = partes[3]
-        fecha = partes[4]
-        hora = partes[5]
+        # 🔍 Detectar si es una cancelación
+        elif "cancelar" in mensaje:
+            partes = mensaje.split()
 
-        print(f"🔹 Procesando reserva: {nombre}, {email}, {fecha}, {hora}")
+            if len(partes) < 6:
+                twilio_client.messages.create(
+                    from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+                    to=numero,
+                    body="🗑 Para cancelar una reserva, usa: 'Cancelar Nombre Apellido Email Fecha Hora'."
+                )
+                return PlainTextResponse("", status_code=200)
 
-        # Llamar a la función de reserva en Glofox
-        resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "reservar")
+            nombre = partes[1] + " " + partes[2]
+            email = partes[3]
+            fecha = partes[4]
+            hora = partes[5]
 
-        # Enviar confirmación
-        twilio_client.messages.create(
-            from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-            to=numero,
-            body=resultado
-        )
-        return PlainTextResponse("", status_code=200)
+            print(f"🔹 Procesando cancelación: {nombre}, {email}, {fecha}, {hora}")
 
-    # 🔍 Detectar si es una cancelación
-    elif "cancelar" in mensaje:
-        partes = mensaje.split()
+            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "cancelar")
 
-        if len(partes) < 6:
             twilio_client.messages.create(
                 from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
                 to=numero,
-                body="🗑 Para cancelar una reserva, usa: 'Cancelar Nombre Apellido Email Fecha Hora'."
+                body=resultado
             )
             return PlainTextResponse("", status_code=200)
 
-        nombre = partes[1] + " " + partes[2]
-        email = partes[3]
-        fecha = partes[4]
-        hora = partes[5]
+        # 🧠 Si no es una reserva ni cancelación, responder con OpenAI
+        else:
+            idioma_usuario = detectar_idioma(mensaje)
+            prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
 
-        print(f"🔹 Procesando cancelación: {nombre}, {email}, {fecha}, {hora}")
+            respuesta = client.chat.completions.create(
+                model="gpt-4",
+                temperature=0.4,
+                max_tokens=1500,
+                messages=[{"role": "system", "content": prompt_seleccionado}, {"role": "user", "content": mensaje}]
+            )
 
-        resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "cancelar")
+            respuesta_texto = respuesta.choices[0].message.content
 
-        twilio_client.messages.create(
-            from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-            to=numero,
-            body=resultado
-        )
-        return PlainTextResponse("", status_code=200)
+            twilio_client.messages.create(
+                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+                to=numero,
+                body=respuesta_texto
+            )
+            return PlainTextResponse("", status_code=200)
 
-    # 🧠 Si no es una reserva ni cancelación, responder con OpenAI
-    else:
-        idioma_usuario = detectar_idioma(mensaje)
-        prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
+    except ClientDisconnect:
+        print("⚠️ Cliente desconectado antes de completar la solicitud.")
+        return PlainTextResponse("Cliente desconectado.", status_code=499)
 
-        respuesta = client.chat.completions.create(
-            model="gpt-4",
-            temperature=0.4,
-            max_tokens=1500,
-            messages=[{"role": "system", "content": prompt_seleccionado}, {"role": "user", "content": mensaje}]
-        )
-
-        respuesta_texto = respuesta.choices[0].message.content
-
-        twilio_client.messages.create(
-            from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-            to=numero,
-            body=respuesta_texto
-        )
-        return PlainTextResponse("", status_code=200)
+    except Exception as e:
+        print(f"❌ Error en webhook de WhatsApp: {e}")
+        return PlainTextResponse("Error interno del servidor", status_code=500)
 
 PORT = int(os.environ.get("PORT", 8000))
 
