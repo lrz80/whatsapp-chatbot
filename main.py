@@ -174,8 +174,8 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        # Ruta corregida de ChromeDriver en Railway
-        service = Service("/usr/local/bin/chromedriver")  
+        # 🔥 Usar el ChromeDriver instalado en Railway
+        service = Service("/usr/local/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         print("✅ Selenium configurado correctamente.")
