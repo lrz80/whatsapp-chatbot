@@ -173,18 +173,20 @@ def detectar_idioma(mensaje):
         return idioma if idioma in ["es", "en"] else "es"
     except:
         return "es"
-    
+
+# Definir nombre del estudio directamente en una variable
+NOMBRE_ESTUDIO = "SpinZone"
+
 # Cargar variables de entorno
 OUTLOOK_EMAIL = os.getenv("OUTLOOK_EMAIL")
 OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
 IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
 GLOFOX_EMAIL = os.getenv("GLOFOX_EMAIL")
 GLOFOX_PASSWORD = os.getenv("GLOFOX_PASSWORD")
-GLOFOX_BUSINESS = os.getenv("GLOFOX_BUSINESS")
 
 # 🌐 Configuración de Glofox
 GLOFOX_URL = "https://app.glofox.com/dashboard/#/glofox/login"
-BUSINESS_NAME = GLOFOX_BUSINESS
+BUSINESS_NAME = NOMBRE_ESTUDIO
 
 def obtener_codigo_glofox():
     """Conecta a Outlook vía IMAP y extrae el código de verificación de Glofox."""
