@@ -1,5 +1,8 @@
 import uvicorn
 import os
+import imaplib
+import email
+import re
 import time
 import gspread
 import asyncio
@@ -25,6 +28,8 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from email.header import decode_header
+from selenium.webdriver.common.keys import Keys
 
 # Cargar variables de entorno
 load_dotenv()
@@ -164,9 +169,62 @@ def detectar_idioma(mensaje):
     except:
         return "es"
     
-NOMBRE_ESTUDIO = "spinzone"
+NOMBRE_ESTUDIO = "SpinZone"
 
-# Función para manejar reservas/cancelaciones en Glofox
+# Cargar variables de entorno
+EMAIL = os.getenv("OUTLOOK_EMAIL")
+APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
+IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
+
+# 🌐 Configuración de Glofox
+GLOFOX_URL = "https://app.glofox.com/dashboard/#/glofox/login"
+BUSINESS_NAME = "NOMBRE_ESTUDIO"  # Reemplázalo con el nombre de tu estudio
+GLOFOX_EMAIL = "tu_email@example.com"  # Reemplázalo con tu email de Glofox
+GLOFOX_PASSWORD = "tu_contraseña"  # Reemplázalo con tu contraseña de Glofox
+
+# Cargar variables de entorno
+EMAIL = os.getenv("OUTLOOK_EMAIL")
+APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
+IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
+
+def obtener_codigo_glofox():
+    """Conecta a Outlook vía IMAP y extrae el código de verificación de Glofox."""
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER)
+        mail.login(EMAIL, APP_PASSWORD)  # Usa la contraseña de aplicación almacenada en variable de entorno
+        mail.select("inbox")
+
+        _, messages = mail.search(None, "ALL")
+        latest_email_id = messages[0].split()[-1]  # Último email recibido
+
+        _, msg_data = mail.fetch(latest_email_id, "(RFC822)")
+        for response_part in msg_data:
+            if isinstance(response_part, tuple):
+                msg = email.message_from_bytes(response_part[1])
+                subject, encoding = decode_header(msg["Subject"])[0]
+                if isinstance(subject, bytes):
+                    subject = subject.decode(encoding or "utf-8")
+
+                if "Glofox" in subject:  # Buscar correos con el código
+                    body = ""
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            content_type = part.get_content_type()
+                            if content_type == "text/plain":
+                                body = part.get_payload(decode=True).decode()
+                    else:
+                        body = msg.get_payload(decode=True).decode()
+
+                    codigo = "".join(filter(str.isdigit, body))  # Extraer solo los números
+                    print(f"📩 Código recibido: {codigo}")
+                    return codigo
+
+        mail.logout()
+        return None
+    except Exception as e:
+        print(f"❌ Error al obtener el código de Glofox: {e}")
+        return None
+
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
         print("🔹 Configurando Selenium con Chrome en Railway...")
@@ -186,26 +244,38 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         # Accede a la URL de inicio de sesión
         driver.get("https://app.glofox.com/dashboard/#/glofox/login")
 
+        # Espera a que los campos de login estén disponibles
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "businessName")))
+
+        # Llenar el formulario de inicio de sesión
+        driver.find_element(By.NAME, "businessName").send_keys("Nombre de tu negocio")
+        driver.find_element(By.NAME, "email").send_keys(EMAIL)
+        driver.find_element(By.NAME, "password").send_keys(APP_PASSWORD)
+
+        # Hacer clic en el botón de Login
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Login')]").click()
+
+        # Esperar a que aparezca el campo del código de verificación
         try:
-            # Espera a que los campos de login estén disponibles
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "businessName")))
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "verificationCode")))
 
-            # Llenar el formulario de inicio de sesión
-            driver.find_element(By.NAME, "businessName").send_keys(NOMBRE_ESTUDIO)
-            driver.find_element(By.NAME, "email").send_keys("tu_email@example.com")
-            driver.find_element(By.NAME, "password").send_keys("tu_contraseña")
+            print("🔹 Se necesita código de verificación, obteniendo desde Outlook...")
+            codigo = obtener_codigo_glofox()
 
-            # Hacer clic en el botón de Login
-            driver.find_element(By.XPATH, "//button[contains(text(), 'Login')]").click()
+            if codigo:
+                driver.find_element(By.NAME, "verificationCode").send_keys(codigo)
+                driver.find_element(By.XPATH, "//button[contains(text(), 'Verify')]").click()
+                print("✅ Código de verificación ingresado correctamente.")
+            else:
+                print("❌ No se pudo obtener el código de verificación.")
+                driver.quit()
+                return "Error al obtener el código de verificación."
+        except:
+            print("✅ No se requirió código de verificación.")
 
-            # Esperar a que la página cargue después del login
-            WebDriverWait(driver, 10).until(EC.url_contains("/dashboard"))
-            print("✅ Inicio de sesión exitoso en Glofox.")
-        
-        except Exception as e:
-            print(f"❌ Error en el inicio de sesión: {e}")
-            driver.quit()
-            return "Error al iniciar sesión en Glofox."
+        # Esperar a que la página cargue después del login
+        WebDriverWait(driver, 10).until(EC.url_contains("/dashboard"))
+        time.sleep(3)
 
         if accion == "reservar":
             print(f"🔹 Buscando la clase para {fecha} a las {hora}...")
@@ -243,8 +313,20 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         return mensaje
 
     except Exception as e:
-        print(f"❌ Error en Selenium: {e}")
-        return "Ocurrió un error en la automatización."
+        print(f"❌ Error en el inicio de sesión: {e}")
+        return "Error al iniciar sesión en Glofox."
+
+# Prueba de reserva (ajusta estos valores según sea necesario)
+mensaje_reserva = gestionar_reserva_glofox(
+    nombre="Luis Rojas",
+    email="luisamazon80@gmail.com",
+    fecha="2025-03-13",
+    hora="19:30",
+    numero="+18633171646",
+    accion="reservar"
+)
+
+print(mensaje_reserva)
 
 @app.post("/reserva")
 async def recibir_reserva(request: ReservaRequest):

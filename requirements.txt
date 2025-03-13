@@ -17,3 +17,4 @@ oauth2client
 selenium
 undetected-chromedriver
 webdriver-manager
+selenium imapclient
