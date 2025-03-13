@@ -165,16 +165,17 @@ def detectar_idioma(mensaje):
 # Función para manejar reservas/cancelaciones en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
-        print("🔹 Configurando Selenium con webdriver-manager...")
+        print("🔹 Configurando Selenium con Chrome en Railway...")
 
         chrome_options = Options()
+        chrome_options.binary_location = "/usr/bin/google-chrome"  # Ruta de Chrome en Railway
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        # Usar webdriver-manager para manejar Chrome y Chromedriver automáticamente
-        service = Service(ChromeDriverManager().install())
+        # Usar el ChromeDriver instalado en entrypoint.sh
+        service = Service("/usr/local/bin/chromedriver")  
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         print("✅ Selenium configurado correctamente.")
