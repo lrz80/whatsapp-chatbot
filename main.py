@@ -10,6 +10,7 @@ import aiohttp
 import tempfile
 import openai
 import uuid
+import shutil
 import undetected_chromedriver as uc
 from starlette.requests import ClientDisconnect
 from fastapi import FastAPI, Request
@@ -242,14 +243,19 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
         print("🔹 Configurando Selenium con Chrome en Railway...")
 
-        # Crear un directorio temporal único para evitar conflictos
-        temp_dir = tempfile.mkdtemp()
+        # Eliminar el directorio de usuario anterior si existe
+        chrome_user_data_dir = "/tmp/chrome_user_data"
+        if os.path.exists(chrome_user_data_dir):
+            shutil.rmtree(chrome_user_data_dir)
 
-        chrome_options = Options()
-        chrome_options.add_argument(f"--user-data-dir={temp_dir}")  # Directorio temporal único
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--headless")  # Si estás corriendo en un servidor sin GUI
+        # Opciones de Chrome
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument(f"--user-data-dir={chrome_user_data_dir}")
+        chrome_options.add_argument("--disable-dev-shm-usage")  # Para evitar problemas en contenedores
+
+        # Iniciar WebDriver con las opciones corregidas
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
 
         # Crear instancia de WebDriver
         service = Service("/usr/bin/chromedriver")  # Ajusta el path si es necesario
