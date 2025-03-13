@@ -40,6 +40,13 @@ load_dotenv()
 service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service)
 
+# Verificar si ChromeDriver está corriendo
+def cerrar_chromedriver():
+    os.system("pkill -f chromedriver")  # Mata todos los procesos de ChromeDriver
+    os.system("pkill -f chrome")  # Mata todos los procesos de Chrome
+
+cerrar_chromedriver()  # Llamar esta función antes de iniciar una nueva sesión de Selenium
+
 # Cargar credenciales desde una variable de entorno en lugar de un archivo
 google_credentials = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
 
@@ -231,30 +238,19 @@ def obtener_codigo_glofox():
         print(f"❌ Error al obtener el código de Glofox: {e}")
         return None
 
-# Verificar si ChromeDriver está corriendo
-def cerrar_chromedriver():
-    os.system("pkill -f chromedriver")  # Mata todos los procesos de ChromeDriver
-    os.system("pkill -f chrome")  # Mata todos los procesos de Chrome
-
-cerrar_chromedriver()  # Llamar esta función antes de iniciar una nueva sesión de Selenium
-
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
         print("🔹 Configurando Selenium con Chrome en Railway...")
 
-        chrome_options = Options()
-        user_data_dir = f"/tmp/chrome_user_data_{uuid.uuid4()}"  # Genera una carpeta única para cada sesión
-        chrome_options.add_argument(f"--user-data-dir={user_data_dir}")       
+        # Crear un directorio temporal único para evitar conflictos
+        temp_dir = tempfile.mkdtemp()
 
-        # Desactivar sandbox si corres en contenedores (opcional)
+        chrome_options = Options()
+        chrome_options.add_argument(f"--user-data-dir={temp_dir}")  # Directorio temporal único
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--headless")  # Si estás corriendo en un servidor sin GUI
 
-
-        chrome_options.binary_location = "/usr/bin/google-chrome"  # Ruta de Chrome en Railway
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        
         # Crear instancia de WebDriver
         service = Service("/usr/bin/chromedriver")  # Ajusta el path si es necesario
         driver = webdriver.Chrome(service=service, options=chrome_options)
