@@ -174,7 +174,7 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        # Usar el ChromeDriver instalado en entrypoint.sh
+        # Ruta corregida de ChromeDriver en Railway
         service = Service("/usr/local/bin/chromedriver")  
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
