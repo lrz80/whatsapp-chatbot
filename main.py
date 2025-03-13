@@ -9,6 +9,7 @@ import asyncio
 import aiohttp
 import tempfile
 import openai
+import uuid
 import undetected_chromedriver as uc
 from starlette.requests import ClientDisconnect
 from fastapi import FastAPI, Request
@@ -174,19 +175,20 @@ def detectar_idioma(mensaje):
     except:
         return "es"
 
-# Definir nombre del estudio directamente en una variable
+# Definir el nombre del estudio
 NOMBRE_ESTUDIO = "SpinZone"
 
 # Cargar variables de entorno
 OUTLOOK_EMAIL = os.getenv("OUTLOOK_EMAIL")
 OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
 IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
+
 GLOFOX_EMAIL = os.getenv("GLOFOX_EMAIL")
 GLOFOX_PASSWORD = os.getenv("GLOFOX_PASSWORD")
+GLOFOX_BUSINESS = os.getenv("GLOFOX_BUSINESS", NOMBRE_ESTUDIO)  # Usar el nombre del estudio si no está en env
 
 # 🌐 Configuración de Glofox
 GLOFOX_URL = "https://app.glofox.com/dashboard/#/glofox/login"
-BUSINESS_NAME = NOMBRE_ESTUDIO
 
 def obtener_codigo_glofox():
     """Conecta a Outlook vía IMAP y extrae el código de verificación de Glofox."""
@@ -229,20 +231,32 @@ def obtener_codigo_glofox():
         print(f"❌ Error al obtener el código de Glofox: {e}")
         return None
 
+# Verificar si ChromeDriver está corriendo
+def cerrar_chromedriver():
+    os.system("pkill -f chromedriver")  # Mata todos los procesos de ChromeDriver
+    os.system("pkill -f chrome")  # Mata todos los procesos de Chrome
+
+cerrar_chromedriver()  # Llamar esta función antes de iniciar una nueva sesión de Selenium
+
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
         print("🔹 Configurando Selenium con Chrome en Railway...")
 
         chrome_options = Options()
+        user_data_dir = f"/tmp/chrome_user_data_{uuid.uuid4()}"  # Genera una carpeta única para cada sesión
+        chrome_options.add_argument(f"--user-data-dir={user_data_dir}")       
+
+        # Desactivar sandbox si corres en contenedores (opcional)
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+
         chrome_options.binary_location = "/usr/bin/google-chrome"  # Ruta de Chrome en Railway
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")  # Evita errores de sesión
-
-        # Configurar ChromeDriver
-        service = Service(ChromeDriverManager().install())
+        
+        # Crear instancia de WebDriver
+        service = Service("/usr/bin/chromedriver")  # Ajusta el path si es necesario
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         print("✅ Selenium configurado correctamente.")
