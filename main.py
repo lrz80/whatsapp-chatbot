@@ -23,6 +23,8 @@ import json
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Cargar variables de entorno
 load_dotenv()
@@ -161,6 +163,8 @@ def detectar_idioma(mensaje):
         return idioma if idioma in ["es", "en"] else "es"
     except:
         return "es"
+    
+NOMBRE_ESTUDIO = "spinzone"
 
 # Función para manejar reservas/cancelaciones en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
@@ -168,25 +172,40 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         print("🔹 Configurando Selenium con Chrome en Railway...")
 
         chrome_options = Options()
-        chrome_options.binary_location = "/usr/bin/google-chrome"  # Ruta de Chrome en Railway
+        chrome_options.binary_location = "/usr/bin/google-chrome"
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        # Usar webdriver-manager para obtener la versión correcta de ChromeDriver
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
         print("✅ Selenium configurado correctamente.")
 
-        driver.get("https://app.glofox.com/portal/#/login")
-        print("🔹 Iniciando sesión en Glofox...")
+        # Accede a la URL de inicio de sesión
+        driver.get("https://app.glofox.com/dashboard/#/glofox/login")
 
-        driver.find_element("id", "email").send_keys("tu_email@example.com")
-        driver.find_element("id", "password").send_keys("tu_contraseña")
-        driver.find_element("id", "login-button").click()
-        time.sleep(3)
+        try:
+            # Espera a que los campos de login estén disponibles
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "businessName")))
+
+            # Llenar el formulario de inicio de sesión
+            driver.find_element(By.NAME, "businessName").send_keys(NOMBRE_ESTUDIO)
+            driver.find_element(By.NAME, "email").send_keys("tu_email@example.com")
+            driver.find_element(By.NAME, "password").send_keys("tu_contraseña")
+
+            # Hacer clic en el botón de Login
+            driver.find_element(By.XPATH, "//button[contains(text(), 'Login')]").click()
+
+            # Esperar a que la página cargue después del login
+            WebDriverWait(driver, 10).until(EC.url_contains("/dashboard"))
+            print("✅ Inicio de sesión exitoso en Glofox.")
+        
+        except Exception as e:
+            print(f"❌ Error en el inicio de sesión: {e}")
+            driver.quit()
+            return "Error al iniciar sesión en Glofox."
 
         if accion == "reservar":
             print(f"🔹 Buscando la clase para {fecha} a las {hora}...")
@@ -194,7 +213,7 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
             time.sleep(2)
 
             try:
-                boton_clase = driver.find_element("xpath", "//button[contains(text(), 'Indoor Cycling')]")
+                boton_clase = driver.find_element(By.XPATH, "//button[contains(text(), 'Indoor Cycling')]")
                 boton_clase.click()
                 print("✅ Clase encontrada y seleccionada.")
             except Exception as e:
@@ -202,14 +221,14 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
                 driver.quit()
                 return "No se pudo encontrar la clase en Glofox."
 
-            driver.find_element("xpath", "//input[@name='date']").send_keys(fecha)
-            driver.find_element("xpath", "//input[@name='time']").send_keys(hora)
-            driver.find_element("xpath", "//input[@name='name']").send_keys(nombre)
-            driver.find_element("xpath", "//input[@name='email']").send_keys(email)
-            driver.find_element("xpath", "//input[@name='phone']").send_keys(numero)
+            driver.find_element(By.XPATH, "//input[@name='date']").send_keys(fecha)
+            driver.find_element(By.XPATH, "//input[@name='time']").send_keys(hora)
+            driver.find_element(By.XPATH, "//input[@name='name']").send_keys(nombre)
+            driver.find_element(By.XPATH, "//input[@name='email']").send_keys(email)
+            driver.find_element(By.XPATH, "//input[@name='phone']").send_keys(numero)
 
             try:
-                boton_reserva = driver.find_element("xpath", "//button[contains(text(), 'Reservar')]")
+                boton_reserva = driver.find_element(By.XPATH, "//button[contains(text(), 'Reservar')]")
                 boton_reserva.click()
                 print("✅ Reserva realizada correctamente.")
             except Exception as e:
