@@ -28,6 +28,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from email.header import decode_header
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
+from google.oauth2.service_account import Credentials
 
 # Cargar variables de entorno
 load_dotenv()
@@ -62,7 +63,8 @@ openai.api_key = OPENAI_API_KEY
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Configuración de Google Sheets
-credentials = gspread.service_account_from_dict(google_credentials)
+scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+credentials = Credentials.from_service_account_info(google_credentials, scopes=scopes)
 gc = gspread.authorize(credentials)
 sh = gc.open("Reservas_IndoorCycling").sheet1  # Nombre de la hoja en Google Sheets
 
