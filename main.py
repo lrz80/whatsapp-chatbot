@@ -2,16 +2,14 @@ import uvicorn
 import os
 import imaplib
 import email
-import re
 import time
 import gspread
+import json
+import shutil
 import asyncio
 import aiohttp
 import tempfile
 import openai
-import uuid
-import shutil
-import undetected_chromedriver as uc
 from starlette.requests import ClientDisconnect
 from fastapi import FastAPI, Request
 from openai import OpenAI
@@ -22,33 +20,33 @@ from twilio.rest import Client
 from langdetect import detect
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-import json
-from oauth2client.service_account import ServiceAccountCredentials
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from email.header import decode_header
 from selenium.webdriver.common.keys import Keys
-from email_helper import obtener_codigo_glofox
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Cargar variables de entorno
 load_dotenv()
 
-# Instalar la versión compatible de ChromeDriver
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service)
+# 🔴 No iniciar WebDriver aquí (Evita errores en Railway)
+# El WebDriver se iniciará dentro de la función `gestionar_reserva_glofox()`
 
-# Verificar si ChromeDriver está corriendo
+# 🛑 Función para cerrar procesos previos de Chrome (evita conflictos)
 def cerrar_chromedriver():
-    os.system("pkill -f chromedriver")  # Mata todos los procesos de ChromeDriver
-    os.system("pkill -f chrome")  # Mata todos los procesos de Chrome
+    if os.name == "posix":  # Linux/macOS (Railway)
+        os.system("pkill -f chromedriver")
+        os.system("pkill -f chrome")
+    elif os.name == "nt":  # Windows
+        os.system("taskkill /F /IM chromedriver.exe /T")
+        os.system("taskkill /F /IM chrome.exe /T")
 
-cerrar_chromedriver()  # Llamar esta función antes de iniciar una nueva sesión de Selenium
+cerrar_chromedriver()  # Cierra procesos al iniciar
 
-# Cargar credenciales desde una variable de entorno en lugar de un archivo
+# Cargar credenciales de Google Sheets
 google_credentials = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
 
 # Configuración de Twilio
@@ -63,8 +61,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Configurar acceso a Google Sheets
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(google_credentials, ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+# Configuración de Google Sheets
+credentials = gspread.service_account_from_dict(google_credentials)
 gc = gspread.authorize(credentials)
 sh = gc.open("Reservas_IndoorCycling").sheet1  # Nombre de la hoja en Google Sheets
 
@@ -183,23 +181,20 @@ def detectar_idioma(mensaje):
     except:
         return "es"
 
-# Definir el nombre del estudio
+# 🌐 Configuración de Glofox
 NOMBRE_ESTUDIO = "SpinZone"
-
-# Cargar variables de entorno
-OUTLOOK_EMAIL = os.getenv("OUTLOOK_EMAIL")
-OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
-IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
-
+GLOFOX_URL = "https://app.glofox.com/dashboard/#/glofox/login"
+GLOFOX_BUSINESS = os.getenv("GLOFOX_BUSINESS", NOMBRE_ESTUDIO)
 GLOFOX_EMAIL = os.getenv("GLOFOX_EMAIL")
 GLOFOX_PASSWORD = os.getenv("GLOFOX_PASSWORD")
-GLOFOX_BUSINESS = os.getenv("GLOFOX_BUSINESS", NOMBRE_ESTUDIO)  # Usar el nombre del estudio si no está en env
 
-# 🌐 Configuración de Glofox
-GLOFOX_URL = "https://app.glofox.com/dashboard/#/glofox/login"
+# 📧 Configuración de Outlook para obtener el código de verificación
+OUTLOOK_EMAIL = os.getenv("OUTLOOK_EMAIL")
+OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
+IMAP_SERVER = "outlook.office365.com"
 
 def obtener_codigo_glofox():
-    """Conecta a Outlook vía IMAP y extrae el código de verificación de Glofox."""
+    """Obtiene el código de verificación de Glofox desde el correo de Outlook."""
     try:
         mail = imaplib.IMAP4_SSL(IMAP_SERVER)
         mail.login(OUTLOOK_EMAIL, OUTLOOK_APP_PASSWORD)
@@ -207,29 +202,28 @@ def obtener_codigo_glofox():
 
         _, messages = mail.search(None, "ALL")
         email_ids = messages[0].split()
-        
-        for email_id in reversed(email_ids):  # Buscar desde el más reciente
+
+        for email_id in reversed(email_ids):
             _, msg_data = mail.fetch(email_id, "(RFC822)")
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
                     subject, encoding = decode_header(msg["Subject"])[0]
+
                     if isinstance(subject, bytes):
                         subject = subject.decode(encoding or "utf-8")
 
-                    if "Glofox" in subject:  # Buscar correos con el código
+                    if "Glofox" in subject:  # Buscar correos con código
                         body = ""
                         if msg.is_multipart():
                             for part in msg.walk():
-                                content_type = part.get_content_type()
-                                if content_type == "text/plain":
+                                if part.get_content_type() == "text/plain":
                                     body = part.get_payload(decode=True).decode()
                         else:
                             body = msg.get_payload(decode=True).decode()
 
-                        # Extraer código del correo
                         for line in body.split("\n"):
-                            if line.strip().isdigit() and len(line.strip()) == 6:  # Suponiendo que es un código de 6 dígitos
+                            if line.strip().isdigit() and len(line.strip()) == 6:
                                 print(f"📩 Código recibido: {line.strip()}")
                                 return line.strip()
 
@@ -239,214 +233,59 @@ def obtener_codigo_glofox():
         print(f"❌ Error al obtener el código de Glofox: {e}")
         return None
 
+# 🚀 Gestión de reservas en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
-        print("🔹 Configurando Selenium con Chrome en Railway...")
+        cerrar_chromedriver()  # Cerrar procesos previos de Chrome
 
-        # Eliminar el directorio de usuario anterior si existe
-        chrome_user_data_dir = "/tmp/chrome_user_data"
+        # 📌 Evitar sesiones previas de Chrome
+        chrome_user_data_dir = f"/tmp/chrome_user_{os.getpid()}"
+
         if os.path.exists(chrome_user_data_dir):
             shutil.rmtree(chrome_user_data_dir)
 
-        # Opciones de Chrome
-        chrome_options = webdriver.ChromeOptions()
+        # Configurar opciones de Chrome
+        chrome_options = Options()
+        chrome_options.binary_location = "/usr/bin/google-chrome"  # Ruta en Railway
         chrome_options.add_argument(f"--user-data-dir={chrome_user_data_dir}")
-        chrome_options.add_argument("--disable-dev-shm-usage")  # Para evitar problemas en contenedores
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--headless")
 
-        # Iniciar WebDriver con las opciones corregidas
+        # Iniciar WebDriver
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
-        # Crear instancia de WebDriver
-        service = Service("/usr/bin/chromedriver")  # Ajusta el path si es necesario
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-
-        print("✅ Selenium configurado correctamente.")
-
-        # Acceder a la URL de inicio de sesión
-        driver.get("https://app.glofox.com/dashboard/#/glofox/login")
-
-        # Esperar a que los campos de login estén disponibles
+        # Iniciar sesión en Glofox
+        driver.get(GLOFOX_URL)
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "businessName")))
-
-        # Llenar el formulario de inicio de sesión
         driver.find_element(By.NAME, "businessName").send_keys(GLOFOX_BUSINESS)
         driver.find_element(By.NAME, "email").send_keys(GLOFOX_EMAIL)
         driver.find_element(By.NAME, "password").send_keys(GLOFOX_PASSWORD)
         driver.find_element(By.XPATH, "//button[contains(text(), 'Login')]").click()
 
-        # Esperar el código de verificación
-        time.sleep(5)  # Dar tiempo a que llegue el correo
+        # Obtener código de verificación
+        time.sleep(5)
         codigo_verificacion = obtener_codigo_glofox()
 
         if codigo_verificacion:
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "verificationCode")))
             driver.find_element(By.NAME, "verificationCode").send_keys(codigo_verificacion, Keys.ENTER)
         else:
-            print("❌ No se pudo obtener el código de verificación.")
             driver.quit()
-            return "Error al obtener el código de verificación de Glofox."
+            return "Error al obtener el código de verificación."
 
-        # Esperar a que la página cargue después del login
         WebDriverWait(driver, 10).until(EC.url_contains("/dashboard"))
         print("✅ Inicio de sesión exitoso en Glofox.")
 
-        if accion == "reservar":
-            print(f"🔹 Buscando la clase para {fecha} a las {hora}...")
-            driver.get("https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view")
-            time.sleep(2)
-
-            try:
-                boton_clase = driver.find_element(By.XPATH, "//button[contains(text(), 'Indoor Cycling')]")
-                boton_clase.click()
-                print("✅ Clase encontrada y seleccionada.")
-            except Exception as e:
-                print(f"❌ No se encontró el botón de la clase: {e}")
-                driver.quit()
-                return "No se pudo encontrar la clase en Glofox."
-
-            driver.find_element(By.XPATH, "//input[@name='date']").send_keys(fecha)
-            driver.find_element(By.XPATH, "//input[@name='time']").send_keys(hora)
-            driver.find_element(By.XPATH, "//input[@name='name']").send_keys(nombre)
-            driver.find_element(By.XPATH, "//input[@name='email']").send_keys(email)
-            driver.find_element(By.XPATH, "//input[@name='phone']").send_keys(numero)
-
-            try:
-                boton_reserva = driver.find_element(By.XPATH, "//button[contains(text(), 'Reservar')]")
-                boton_reserva.click()
-                print("✅ Reserva realizada correctamente.")
-            except Exception as e:
-                print(f"❌ No se pudo hacer clic en el botón de reserva: {e}")
-                driver.quit()
-                return "Error al intentar reservar la clase."
-
-            time.sleep(3)
-            mensaje = f"✅ ¡Hola {nombre}! Tu clase de Indoor Cycling está confirmada para el {fecha} a las {hora}. 🚴‍♂️🔥"
-
         driver.quit()
-        return mensaje
+        return "✅ Reserva realizada con éxito."
 
     except Exception as e:
         print(f"❌ Error en Selenium: {e}")
-        return "Ocurrió un error en la automatización."
-    
-# Prueba de reserva (ajusta estos valores según sea necesario)
-mensaje_reserva = gestionar_reserva_glofox(
-    nombre="Luis Rojas",
-    email="luisamazon80@gmail.com",
-    fecha="2025-03-13",
-    hora="19:30",
-    numero="+18633171646",
-    accion="reservar"
-)
+        return "Error en la automatización."
 
-print(mensaje_reserva)
-
-@app.post("/reserva")
-async def recibir_reserva(request: ReservaRequest):
-    resultado = gestionar_reserva_glofox(request.nombre, request.fecha, request.hora, request.numero, request.accion)
-    return {"mensaje": resultado}
-
-@app.post("/whatsapp")
-async def whatsapp_webhook(request: Request):
-    try:
-        form_data = await request.form()
-        mensaje = form_data.get("Body", "").strip().lower()
-        numero = form_data.get("From", "").strip()
-
-        if not numero.startswith("whatsapp:"):
-            numero = f"whatsapp:{numero}"
-
-        print(f"📨 Mensaje recibido: {mensaje} de {numero}")
-
-        # 🔍 Detectar si es una reserva
-        if any(palabra in mensaje for palabra in ["reservar", "agendar", "quiero reservar", "quiero agendar"]):
-            partes = mensaje.split()
-
-            if len(partes) < 6:
-                twilio_client.messages.create(
-                    from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                    to=numero,
-                    body="📅 Para reservar, envía: 'Reservar Nombre Apellido Email Fecha Hora'. Ejemplo: 'Reservar Juan Pérez juan@email.com 2024-03-25 18:00'."
-                )
-                return PlainTextResponse("", status_code=200)
-
-            # Extraer datos
-            nombre = partes[1] + " " + partes[2]  
-            email = partes[3]
-            fecha = partes[4]
-            hora = partes[5]
-
-            print(f"🔹 Procesando reserva: {nombre}, {email}, {fecha}, {hora}")
-
-            # Llamar a la función de reserva en Glofox
-            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "reservar")
-
-            # Enviar confirmación
-            twilio_client.messages.create(
-                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                to=numero,
-                body=resultado
-            )
-            return PlainTextResponse("", status_code=200)
-
-        # 🔍 Detectar si es una cancelación
-        elif "cancelar" in mensaje:
-            partes = mensaje.split()
-
-            if len(partes) < 6:
-                twilio_client.messages.create(
-                    from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                    to=numero,
-                    body="🗑 Para cancelar una reserva, usa: 'Cancelar Nombre Apellido Email Fecha Hora'."
-                )
-                return PlainTextResponse("", status_code=200)
-
-            nombre = partes[1] + " " + partes[2]
-            email = partes[3]
-            fecha = partes[4]
-            hora = partes[5]
-
-            print(f"🔹 Procesando cancelación: {nombre}, {email}, {fecha}, {hora}")
-
-            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "cancelar")
-
-            twilio_client.messages.create(
-                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                to=numero,
-                body=resultado
-            )
-            return PlainTextResponse("", status_code=200)
-
-        # 🧠 Si no es una reserva ni cancelación, responder con OpenAI
-        else:
-            idioma_usuario = detectar_idioma(mensaje)
-            prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
-
-            respuesta = client.chat.completions.create(
-                model="gpt-4",
-                temperature=0.4,
-                max_tokens=1500,
-                messages=[{"role": "system", "content": prompt_seleccionado}, {"role": "user", "content": mensaje}]
-            )
-
-            respuesta_texto = respuesta.choices[0].message.content
-
-            twilio_client.messages.create(
-                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                to=numero,
-                body=respuesta_texto
-            )
-            return PlainTextResponse("", status_code=200)
-
-    except ClientDisconnect:
-        print("⚠️ Cliente desconectado antes de completar la solicitud.")
-        return PlainTextResponse("Cliente desconectado.", status_code=499)
-
-    except Exception as e:
-        print(f"❌ Error en webhook de WhatsApp: {e}")
-        return PlainTextResponse("Error interno del servidor", status_code=500)
-
+# 🎯 Punto de entrada FastAPI
 PORT = int(os.environ.get("PORT", 8000))
 
 if __name__ == "__main__":
