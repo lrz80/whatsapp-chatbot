@@ -32,6 +32,7 @@ from email.header import decode_header
 from selenium.webdriver.common.keys import Keys
 from openai import OpenAI
 from twilio.twiml.messaging_response import MessagingResponse
+from email_helper import obtener_codigo_glofox
 
 # Cargar variables de entorno
 load_dotenv()
@@ -96,6 +97,8 @@ async def whatsapp_webhook(request: Request):
         print(f"📨 Mensaje recibido en WhatsApp: {mensaje} de {numero}")
 
         if any(palabra in mensaje for palabra in ["reservar", "agendar"]):
+            print("✅ Se detectó un intento de reserva en WhatsApp")
+
             partes = mensaje.split()
             if len(partes) < 6:
                 return PlainTextResponse("", status_code=200)
@@ -321,7 +324,7 @@ async def transcribir_audio(url_audio):
 # 📌 Definir función para gestionar reservas en Glofox
 def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
-        print("🔹 Configurando Selenium con Chrome en Railway...")
+        print(f"🔹 Intentando {accion} para {nombre} con email {email}, fecha {fecha}, hora {hora}, número {numero}")
 
         chrome_options = webdriver.ChromeOptions()
         chrome_user_data_dir = f"/tmp/chrome_user_{os.getpid()}"
@@ -335,7 +338,7 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
         chrome_options.add_argument(f"--user-data-dir={chrome_user_data_dir}")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless")  # <-- Comenta esta línea para pruebas
 
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -363,7 +366,7 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
 
     except Exception as e:
         print(f"❌ Error en Selenium: {e}")
-        return "Ocurrió un error en la automatización."
+        return "Error en la reserva, intenta de nuevo más tarde."
 
 # 📌 Ejecutar FastAPI
 PORT = int(os.environ.get("PORT", 8000))
