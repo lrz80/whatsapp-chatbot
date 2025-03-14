@@ -10,6 +10,9 @@ import asyncio
 import aiohttp
 import tempfile
 import openai
+import requests
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import Response, PlainTextResponse
 from starlette.requests import ClientDisconnect
 from fastapi import FastAPI, Request
 from openai import OpenAI
@@ -79,9 +82,97 @@ class ReservaRequest(BaseModel):
     numero: str
     accion: str  # "reservar" o "cancelar"
 
-# Prompt en inglés y español
-prompt_negocio = {
-    "es": """Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.
+class Message(BaseModel):
+    body: str
+
+def detectar_idioma(mensaje):
+    try:
+        idioma = detect(mensaje)
+        print(f"🔍 Idioma detectado: {idioma}")
+        return idioma if idioma in ["es", "en"] else "es"
+    except:
+        return "es"
+
+def dividir_mensaje(mensaje, limite=1300):
+    """Divide un mensaje largo en partes sin cortar palabras."""
+    partes = []
+    while len(mensaje) > limite:
+        corte = mensaje.rfind("\n", 0, limite)  
+        if corte == -1:
+            corte = limite  
+        partes.append(mensaje[:corte])
+        mensaje = mensaje[corte:].strip()
+    
+    partes.append(mensaje)  
+    return partes
+
+@app.post("/whatsapp")
+async def whatsapp_webhook(request: Request):
+    try:
+        form_data = await request.form()
+        mensaje = form_data.get("Body", "").strip()  
+        numero = form_data.get("From", "").strip()  
+        media_url = form_data.get("MediaUrl0", None)  # URL del archivo multimedia
+
+        # Asegurar que 'numero' tenga el formato correcto
+        if not numero.startswith("whatsapp:"):
+            numero = f"whatsapp:{numero}"
+
+        print(f"📩 Número recibido de Twilio: {numero}")
+        print(f"📨 Mensaje recibido: {mensaje} de {numero}")
+
+        # 📌 **Detectar y procesar notas de voz**
+        if media_url:
+            print(f"🎙️ Nota de voz detectada, procesando... {media_url}")
+
+            # ✅ Transcribe el audio con Whisper
+            texto_transcrito = await transcribir_audio(media_url)
+            print(f"📝 Texto transcrito: {texto_transcrito}")
+
+            if texto_transcrito:
+                mensaje = texto_transcrito  # Usa la transcripción como mensaje para GPT
+            else:
+                return PlainTextResponse("No se pudo transcribir el audio.", status_code=400)
+
+        # ✅ Procesar el mensaje con GPT
+        respuesta = responder_chatgpt(mensaje)
+        print(f"💬 Respuesta generada: {respuesta}")
+
+        # ✅ Enviar la respuesta de GPT a WhatsApp
+        partes_respuesta = dividir_mensaje(respuesta)
+        for parte in partes_respuesta:
+            twilio_client.messages.create(
+                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+                to=numero,
+                body=parte
+            )
+
+        return PlainTextResponse("", status_code=200)
+
+    except Exception as e:
+        print(f"❌ Error procesando datos: {e}")
+        return PlainTextResponse("Error interno del servidor", status_code=500)
+
+# Usa directamente la API sin inicializar 'client'
+def responder_chatgpt(mensaje):
+    print(f"📩 Mensaje recibido: {mensaje}")  # Depuración
+
+    client = openai.Client()
+
+    # Pedir a OpenAI que detecte el idioma del usuario directamente
+    prompt_detectar_idioma = f"Detecta el idioma de este mensaje y responde solo con 'es' o 'en': {mensaje}"
+    
+    respuesta_idioma = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt_detectar_idioma}]
+    )
+
+    idioma_usuario = respuesta_idioma.choices[0].message.content.strip().lower()
+    print(f"🔍 Idioma detectado por OpenAI: {idioma_usuario}")  # Depuración
+
+    # Prompt en inglés y español
+    prompt_negocio = {
+        "es": """Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.
     Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación.
     Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.
 
@@ -127,7 +218,7 @@ prompt_negocio = {
     Si necesitas más información o quieres hablar con un asesor, puedes llamar o escribir al WhatsApp (863)317-1646.
 
     Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto.""",
-    "en": """You are a virtual assistant specialized in Spinzone Indoor Cycling, a center focused on indoor cycling classes and Functional Training classes. 
+        "en": """You are a virtual assistant specialized in Spinzone Indoor Cycling, a center focused on indoor cycling classes and Functional Training classes. 
     Your goal is to provide detailed and accurate information about Spinzone, including schedules, prices, and location.
     Respond in a clear, friendly, and professional manner. Automatically detect the user's language and reply in the same language.
 
@@ -173,15 +264,67 @@ prompt_negocio = {
     If you need more information or wish to speak with a representative, you can call or message us on WhatsApp at (863)317-1646.
 
     Always provide this information when someone asks about Spinzone Indoor Cycling. If the user asks a question outside of these topics, try to redirect them to the WhatsApp contact."""
-}
+    }
 
-# Función para detectar idioma
-def detectar_idioma(mensaje):
+    # Usar el idioma detectado o español por defecto si hay error
+    prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
+    print(f"📝 Prompt seleccionado: {'ENGLISH' if idioma_usuario == 'en' else 'SPANISH'}")  # Depuración
+
     try:
-        idioma = detect(mensaje)
-        return idioma if idioma in ["es", "en"] else "es"
-    except:
-        return "es"
+        respuesta_openai = openai.chat.completions.create(
+            model="gpt-4",
+            temperature=0.4,
+            max_tokens=1500,
+            messages=[
+                {"role": "system", "content": prompt_seleccionado},
+                {"role": "user", "content": mensaje}
+            ]
+        )
+
+        mensaje_respuesta = respuesta_openai.choices[0].message.content
+        print(f"💬 Respuesta generada: {mensaje_respuesta}")  # 🔴 Depuración
+
+        return mensaje_respuesta
+
+    except Exception as e:
+        print(f"❌ Error llamando a OpenAI: {e}")
+        return "Hubo un error al procesar tu solicitud. Inténtalo nuevamente más tarde."
+
+# 🔵 Función para transcribir notas de voz con Whisper
+async def transcribir_audio(url_audio):
+    try:
+        TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+        TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+        # ✅ Descargar el archivo de audio desde Twilio con autenticación
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url_audio, auth=aiohttp.BasicAuth(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)) as response:
+                if response.status != 200:
+                    print(f"❌ Error descargando el audio: {response.status}")
+                    return None  # Si la descarga falla, retorna None
+
+                audio_data = await response.read()
+
+        # ✅ Guardar el archivo en un directorio temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as temp_audio:
+            temp_audio.write(audio_data)
+            temp_audio_path = temp_audio.name  # Ruta del archivo
+
+        # ✅ Transcribir el audio usando OpenAI 1.65.0
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)  # 🔥 NUEVO CLIENTE OpenAI
+        
+        with open(temp_audio_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+
+        return transcript.text  # ✅ Retorna el texto transcrito
+
+    except Exception as e:
+        print(f"❌ Error en la transcripción de audio: {e}")
+        return None
 
 # 🌐 Configuración de Glofox
 NOMBRE_ESTUDIO = "SpinZone"
