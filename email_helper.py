@@ -10,46 +10,48 @@ APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
 IMAP_SERVER = "outlook.office365.com"
 
 def obtener_codigo_glofox():
-    """Conecta a Outlook vía IMAP y extrae el código de verificación de Glofox."""
     try:
-        print("🔍 Buscando código de verificación en Outlook...")
+        print("📩 Buscando código de verificación en el correo...")
+
+        OUTLOOK_EMAIL = os.getenv("OUTLOOK_EMAIL")
+        OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD")
+        IMAP_SERVER = os.getenv("IMAP_SERVER", "outlook.office365.com")
+
         mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-        mail.login(EMAIL, APP_PASSWORD)
+        mail.login(OUTLOOK_EMAIL, OUTLOOK_APP_PASSWORD)
         mail.select("inbox")
 
-        # Buscar los correos más recientes con "Glofox" en el asunto
-        _, messages = mail.search(None, '(FROM "no-reply@glofox.com" SUBJECT "Your two-step verification code")')
+        _, messages = mail.search(None, "ALL")
+        email_ids = messages[0].split()
 
-        if not messages[0]:
-            print("❌ No se encontró un correo de verificación de Glofox.")
-            return None
+        for email_id in reversed(email_ids):
+            _, msg_data = mail.fetch(email_id, "(RFC822)")
+            for response_part in msg_data:
+                if isinstance(response_part, tuple):
+                    msg = email.message_from_bytes(response_part[1])
+                    subject, encoding = decode_header(msg["Subject"])[0]
+                    if isinstance(subject, bytes):
+                        subject = subject.decode(encoding or "utf-8")
 
-        latest_email_id = messages[0].split()[-1]  # Último email recibido
+                    if "Glofox" in subject:
+                        print(f"📨 Email encontrado: {subject}")
+                        body = ""
+                        if msg.is_multipart():
+                            for part in msg.walk():
+                                content_type = part.get_content_type()
+                                if content_type == "text/plain":
+                                    body = part.get_payload(decode=True).decode()
+                        else:
+                            body = msg.get_payload(decode=True).decode()
 
-        _, msg_data = mail.fetch(latest_email_id, "(RFC822)")
-        for response_part in msg_data:
-            if isinstance(response_part, tuple):
-                msg = email.message_from_bytes(response_part[1])
-                body = ""
+                        for line in body.split("\n"):
+                            if line.strip().isdigit() and len(line.strip()) == 6:
+                                print(f"✅ Código encontrado: {line.strip()}")
+                                return line.strip()
 
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        content_type = part.get_content_type()
-                        if content_type == "text/plain":
-                            body = part.get_payload(decode=True).decode()
-                else:
-                    body = msg.get_payload(decode=True).decode()
-
-                # Extraer código de verificación (asumiendo que es un número de 6 dígitos en el correo)
-                import re
-                match = re.search(r'\b\d{6}\b', body)
-                if match:
-                    code = match.group(0)
-                    print(f"📩 Código recibido: {code}")
-                    return code
-
+        print("❌ No se encontró código de verificación en el correo.")
         mail.logout()
         return None
     except Exception as e:
-        print(f"❌ Error al obtener el código de Glofox: {e}")
+        print(f"❌ Error al obtener código de Glofox: {e}")
         return None

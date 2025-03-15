@@ -326,47 +326,105 @@ def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
     try:
         print(f"🔹 Intentando {accion} para {nombre} con email {email}, fecha {fecha}, hora {hora}, número {numero}")
 
+        # Configurar opciones de Chrome
         chrome_options = webdriver.ChromeOptions()
-        chrome_user_data_dir = f"/tmp/chrome_user_{os.getpid()}"
-
-        if os.path.exists(chrome_user_data_dir):
-            try:
-                shutil.rmtree(chrome_user_data_dir)
-            except Exception as e:
-                print(f"⚠️ Advertencia: No se pudo eliminar {chrome_user_data_dir}: {e}")
-
-        chrome_options.add_argument(f"--user-data-dir={chrome_user_data_dir}")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--headless")  # <-- Comenta esta línea para pruebas
+        chrome_options.add_argument("--headless")  # Puedes comentarla para ver el navegador
 
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
 
+        # 1️⃣ Iniciar sesión en Glofox
         driver.get("https://app.glofox.com/dashboard/#/glofox/login")
-
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "businessName")))
         driver.find_element(By.NAME, "businessName").send_keys(os.getenv("GLOFOX_BUSINESS"))
         driver.find_element(By.NAME, "email").send_keys(os.getenv("GLOFOX_EMAIL"))
         driver.find_element(By.NAME, "password").send_keys(os.getenv("GLOFOX_PASSWORD"))
         driver.find_element(By.XPATH, "//button[contains(text(), 'Login')]").click()
 
+        # Esperar la verificación de código
         time.sleep(5)
-
         codigo_verificacion = obtener_codigo_glofox()
         if not codigo_verificacion:
             driver.quit()
-            return "❌ Error: No se pudo obtener el código de verificación."
+            return "❌ Error: No se pudo obtener el código de verificación de Glofox."
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "verificationCode")))
         driver.find_element(By.NAME, "verificationCode").send_keys(codigo_verificacion, Keys.ENTER)
 
+        # 2️⃣ Ir a la pestaña Manage → Leads
+        WebDriverWait(driver, 10).until(EC.url_contains("dashboard"))
+        driver.get("https://app.glofox.com/dashboard/#/leads")
+
+        # 3️⃣ Buscar si el usuario ya existe
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Search Leads']")))
+        search_box = driver.find_element(By.XPATH, "//input[@placeholder='Search Leads']")
+        search_box.send_keys(email)
+        time.sleep(2)
+
+        try:
+            # Si encuentra el usuario, acceder a su perfil
+            user_profile = driver.find_element(By.XPATH, f"//td[contains(text(), '{email}')]")
+            user_profile.click()
+        except:
+            # Si el usuario no existe, crearlo
+            print("🔹 Cliente no encontrado. Agregando nuevo Lead...")
+            add_lead_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Add Lead')]")
+            add_lead_button.click()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "first_name")))
+
+            # Completar el formulario de Lead
+            first_name, last_name = nombre.split(" ", 1)
+            driver.find_element(By.NAME, "first_name").send_keys(first_name)
+            driver.find_element(By.NAME, "last_name").send_keys(last_name)
+            driver.find_element(By.NAME, "email").send_keys(email)
+            driver.find_element(By.NAME, "phone_number").send_keys(numero)
+
+            # Guardar Lead
+            driver.find_element(By.XPATH, "//button[contains(text(), 'Add Lead')]").click()
+            time.sleep(3)
+
+        # 4️⃣ Ir a la pestaña de Créditos y comprar el crédito gratis
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), '0 Credits')]")))
+        driver.find_element(By.XPATH, "//a[contains(text(), '0 Credits')]").click()
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Purchase credit pack')]")))
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Purchase credit pack')]").click()
+
+        # Seleccionar la opción gratuita
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Purchase') and contains(@aria-label, 'Free')]")))
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Purchase') and contains(@aria-label, 'Free')]").click()
+        time.sleep(2)
+
+        # 5️⃣ Buscar la clase y reservar
+        driver.get("https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view")
+        time.sleep(3)
+
+        # Seleccionar la fecha y hora
+        driver.find_element(By.XPATH, "//input[@name='date']").send_keys(fecha)
+        driver.find_element(By.XPATH, "//input[@name='time']").send_keys(hora)
+        driver.find_element(By.XPATH, "//input[@name='name']").send_keys(nombre)
+        driver.find_element(By.XPATH, "//input[@name='email']").send_keys(email)
+        driver.find_element(By.XPATH, "//input[@name='phone']").send_keys(numero)
+
+        # Hacer la reserva
+        try:
+            boton_reserva = driver.find_element(By.XPATH, "//button[contains(text(), 'Reservar')]")
+            boton_reserva.click()
+            print("✅ Reserva realizada correctamente.")
+        except Exception as e:
+            print(f"❌ No se pudo hacer clic en el botón de reserva: {e}")
+            driver.quit()
+            return "Error al intentar reservar la clase."
+
+        time.sleep(3)
         driver.quit()
-        return f"✅ {accion.capitalize()} realizada con éxito."
+
+        return f"✅ ¡Hola {nombre}! Tu clase de Indoor Cycling está confirmada para el {fecha} a las {hora}. 🚴‍♂️🔥"
 
     except Exception as e:
         print(f"❌ Error en Selenium: {e}")
-        return "Error en la reserva, intenta de nuevo más tarde."
+        return "Ocurrió un error en la automatización."
 
 # 📌 Ejecutar FastAPI
 PORT = int(os.environ.get("PORT", 8000))
