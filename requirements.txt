@@ -19,3 +19,4 @@ undetected-chromedriver
 webdriver-manager
 selenium 
 imapclient
+selenium==4.10.0  # O la última versión estable

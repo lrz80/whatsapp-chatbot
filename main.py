@@ -37,7 +37,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from email_helper import obtener_codigo_glofox
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.chrome.webdriver import RemoteConnection
+from selenium.webdriver.remote.remote_connection import RemoteConnection
 
 # Cargar variables de entorno
 load_dotenv()
