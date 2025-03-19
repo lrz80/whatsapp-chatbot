@@ -11,12 +11,9 @@ twilio
 langdetect
 python-multipart
 aiohttp
-selenium
 gspread
 oauth2client
-selenium
 undetected-chromedriver
-webdriver-manager
-selenium 
+webdriver-manager 
 imapclient
 selenium==4.10.0  # O la última versión estable

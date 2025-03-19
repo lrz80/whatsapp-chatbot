@@ -103,14 +103,6 @@ print("🔑 OPENAI_API_KEY:", "Cargada correctamente" if OPENAI_API_KEY else "�
 print("📞 TWILIO_ACCOUNT_SID:", "Cargada correctamente" if TWILIO_ACCOUNT_SID else "❌ No encontrada")
 print("🔑 TWILIO_AUTH_TOKEN:", "Cargada correctamente" if TWILIO_AUTH_TOKEN else "❌ No encontrada")
 
-# 📌 Clase para manejar reservas
-class ReservaRequest(BaseModel):
-    nombre: str
-    email: str
-    fecha: str
-    hora: str
-    numero: str
-    accion: str  # "reservar" o "cancelar"
 
 # 📌 Webhook de WhatsApp
 @app.post("/whatsapp")
@@ -198,7 +190,8 @@ def responder_chatgpt(mensaje):
 
         # 🔴 **Aquí definimos `prompt_negocio` dentro de la función**
         prompt_negocio = {
-            "es": """Eres un asistente virtual experto en Spinzone Indoor Cycling, un centro especializado en clases de ciclismo indoor y Clases Funcionales.
+            "es": """Siempre inicia la conversación con: "Hola, bienvenido a Spinzone. ¿En qué puedo ayudarte?".
+        Luego, responde como un asistente virtual de Spinzone Indoor Cycling, un Estudio especializado en clases de ciclismo indoor y Clases Funcionales.
         Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación.
         Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.
 
@@ -209,12 +202,14 @@ def responder_chatgpt(mensaje):
 
         🕒 **Horarios**: 
         CYCLING:
-        - Lunes a Jueves: 9:00am, 6:30pm, 7:00pm
+        - Lunes - Martes - Jueves: 9:00am, 6:30pm, 7:30pm
+        - Miercoles: 8:00am, 9:00am, 6:30pm, 7:30pm
         - Viernes: 9:00am, 7:30pm
         - Sábados y Domingos: 10am
 
         CLASES FUNCIONALES:
-        - Lunes a Viernes: 10:00am, 5:30pm
+        - Lunes a Jueves: 10:00am, 5:30pm
+        - Viernes: 10:00am, 6:30pm
 
         💰 **Precios**: 
         - Primera Clase Gratis.
@@ -244,7 +239,8 @@ def responder_chatgpt(mensaje):
         Si necesitas más información o quieres hablar con un asesor, puedes llamar o escribir al WhatsApp (863)317-1646.
 
         Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto.""",
-            "en": """You are a virtual assistant specialized in Spinzone Indoor Cycling, a center focused on indoor cycling classes and Functional Training classes. 
+            "en": """Always start the conversation with: "Hello, welcome to Spinzone. How can I help you?".
+        Then, respond as a virtual assistant in Spinzone Indoor Cycling, a Studio focused on indoor cycling classes and Functional Training classes. 
         Your goal is to provide detailed and accurate information about Spinzone, including schedules, prices, and location.
         Respond in a clear, friendly, and professional manner. Automatically detect the user's language and reply in the same language.
 
@@ -255,12 +251,14 @@ def responder_chatgpt(mensaje):
 
         🕒 **Schedules**: 
         CYCLING:
-        - Monday to Thursday: 9:00 AM, 6:30 PM, 7:00 PM
+        - Monday - Tuesday - Thursday: 9:00 AM, 6:30 PM, 7:30 PM
+        - Wednesday: 8:00am, 9:00am, 6:30pm, 7:30pm
         - Friday: 9:00 AM, 7:30 PM
         - Saturday and Sunday: 10:00 AM
 
         FUNCTIONAL TRAINING CLASSES:
-        - Monday to Friday: 10:00 AM, 5:30 PM
+        - Monday to Thursday: 10:00 AM, 5:30 PM
+        - Friday: 10:00am, 6:30pm
 
         💰 **Pricing**: 
         - First Class Free.
@@ -349,188 +347,6 @@ async def transcribir_audio(url_audio):
     except Exception as e:
         print(f"❌ Error en la transcripción de audio: {e}")
         return None        
-
-def obtener_codigo_glofox():
-    print("📩 Buscando código de verificación en Outlook...")
-
-    # Conectar con la cuenta de Outlook (IMAP)
-    EMAIL = os.getenv("GLOFOX_EMAIL")
-    PASSWORD = os.getenv("GLOFOX_PASSWORD")
-
-    try:
-        mail = imaplib.IMAP4_SSL("outlook.office365.com")
-        mail.login(EMAIL, PASSWORD)
-        mail.select("inbox")
-
-        # Buscar correos con el asunto relacionado con Glofox
-        result, data = mail.search(None, '(FROM "noreply@glofox.com")')
-        mail_ids = data[0].split()
-
-        if not mail_ids:
-            print("❌ No se encontró un correo de verificación de Glofox.")
-            return None
-
-        # Leer el último correo
-        latest_email_id = mail_ids[-1]
-        result, data = mail.fetch(latest_email_id, "(RFC822)")
-        raw_email = data[0][1]
-        msg = email.message_from_bytes(raw_email)
-
-        # Extraer el cuerpo del email
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    body = part.get_payload(decode=True).decode()
-                    break
-        else:
-            body = msg.get_payload(decode=True).decode()
-
-        # Buscar el código en el email (ajustar según el formato)
-        import re
-        match = re.search(r"Verification code: (\d{6})", body)
-        if match:
-            codigo = match.group(1)
-            print(f"✅ Código de verificación encontrado: {codigo}")
-            return codigo
-        else:
-            print("❌ No se encontró un código en el email.")
-            return None
-
-    except Exception as e:
-        print(f"❌ Error obteniendo el código: {e}")
-        return None
-
-# 📌 Definir función para gestionar reservas en Glofox
-def gestionar_reserva_glofox(nombre, email, fecha, hora, numero, accion):
-    try:
-        print(f"🔹 Intentando {accion} para {nombre} con email {email}, fecha {fecha}, hora {hora}, número {numero}")
-
-        # 1️⃣ **Abrir la página de login de Glofox**
-        driver.get("https://app.glofox.com/dashboard/#/glofox/login")
-        print("🌐 Página de Glofox cargada.")
-
-        # 2️⃣ **Seleccionar el negocio**
-        xpath_business = "//*[@id='content-container--angular']/div/entry-branch-selection/div/div/form/entry-textbox-dropdown/div/input"
-
-        WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, xpath_business)))
-        campo_business = driver.find_element(By.XPATH, xpath_business)
-
-        # 🔥 **Forzar clic y escritura como humano**
-        campo_business.click()
-        business_name = os.getenv("GLOFOX_BUSINESS", "SpinZone")  # Default en caso de que la variable de entorno esté vacía
-        campo_business.clear()
-        campo_business.send_keys(business_name)
-        print(f"📌 Se escribió en Business Name: {business_name}")
-
-        # 🔥 **Esperar a que aparezca la lista desplegable y seleccionar**
-        try:
-            lista_desplegable = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, f"//div[contains(text(), '{business_name}')]"))
-            )
-            time.sleep(2)  # Espera extra
-            campo_business.send_keys(Keys.ARROW_DOWN)
-            time.sleep(1)
-            campo_business.send_keys(Keys.ENTER)
-            print("✅ Se seleccionó el negocio correctamente.")
-        except Exception as e:
-            print(f"⚠️ No se pudo seleccionar el negocio: {e}")
-
-        # 🔥 **Hacer clic fuera del campo para "confirmar" la selección**
-        driver.find_element(By.TAG_NAME, "body").click()
-        time.sleep(2)  # Espera extra para asegurar la selección
-
-        print("🔹 Negocio seleccionado, avanzando al email...")
-
-        # 3️⃣ **Esperar y encontrar el campo de email**
-        try:
-            # Esperar a que el campo de email esté visible
-            campo_email = WebDriverWait(driver, 15).until(
-                EC.visibility_of_element_located((By.XPATH, "//input[contains(@placeholder, 'Enter your email address')]"))
-            )
-            email = os.getenv("GLOFOX_EMAIL")
-            print("✅ Campo de email encontrado:", campo_email)
-        except Exception as e:
-            print("❌ ERROR: No se encontró el campo de email. Detalles:", str(e))
-
-        # ✅ **Forzar visibilidad del campo (por si está oculto o deshabilitado)**
-        driver.execute_script("""
-            let campo = arguments[0];
-            campo.removeAttribute('disabled');
-            campo.removeAttribute('readonly');
-            campo.style.display = 'block';
-            campo.style.visibility = 'visible';
-            campo.style.opacity = '1';
-            campo.focus();
-        """, campo_email)
-
-        # Intentar con send_keys()
-        campo_email.click()
-        campo_email.clear()
-        campo_email.send_keys("GLOFOX_EMAIL")
-
-        # Verificar si se ingresó correctamente
-        email_ingresado = driver.execute_script("return arguments[0].value;", campo_email)
-        if email_ingresado != "GLOFOX_EMAIL":
-            print("⚠️ Intentando con JavaScript...")
-            driver.execute_script("arguments[0].value = arguments[1];", campo_email, "GLOFOX_EMAIL")
-            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo_email)
-
-        print("✅ Email ingresado correctamente.")
-
-        # 4️⃣ **Ingresar Contraseña**
-        xpath_password = "//*[@id='content-container--angular']/div/entry-branch-selection/div/div/form/div[2]/input"
-        WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, xpath_password)))
-        campo_password = driver.find_element(By.XPATH, xpath_password)
-        campo_password.click()
-        escribir_como_humano(campo_password, os.getenv("GLOFOX_PASSWORD"), retraso=0.2)
-        print("✅ Contraseña ingresada correctamente.")
-
-        # 5️⃣ **Clic en el botón de Login**
-        xpath_boton_login = "//*[@id='content-container--angular']/div/entry-branch-selection/div/div/form/div[3]/button"
-        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, xpath_boton_login)))
-        boton_login = driver.find_element(By.XPATH, xpath_boton_login)
-        boton_login.click()
-        print("✅ Se hizo clic en Login.")
-
-        # 6️⃣ **Esperar código de verificación y escribirlo**
-        time.sleep(5)
-        codigo_verificacion = obtener_codigo_glofox()
-        if not codigo_verificacion:
-            print("❌ No se pudo obtener el código de verificación.")
-            return "❌ Error en la verificación."
-
-        xpath_verificacion = "//*[@id='content-container--angular']/div/entry-verification/div/div/form/div[1]/input"
-        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, xpath_verificacion)))
-        campo_verificacion = driver.find_element(By.XPATH, xpath_verificacion)
-        campo_verificacion.send_keys(codigo_verificacion, Keys.ENTER)
-        print("✅ Código ingresado correctamente.")
-
-        # 7️⃣ **Reservar la clase**
-        driver.get("https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view")
-        time.sleep(3)
-
-        driver.find_element(By.XPATH, "//input[@name='date']").send_keys(fecha)
-        driver.find_element(By.XPATH, "//input[@name='time']").send_keys(hora)
-        driver.find_element(By.XPATH, "//input[@name='name']").send_keys(nombre)
-        driver.find_element(By.XPATH, "//input[@name='email']").send_keys(email)
-        driver.find_element(By.XPATH, "//input[@name='phone']").send_keys(numero)
-
-        try:
-            boton_reserva = driver.find_element(By.XPATH, "//button[contains(text(), 'Reservar')]")
-            boton_reserva.click()
-            print("✅ Reserva realizada correctamente.")
-        except Exception as e:
-            print(f"❌ No se pudo hacer clic en el botón de reserva: {e}")
-            return "❌ Error al intentar reservar la clase."
-
-        time.sleep(3)
-        driver.quit()
-
-        return f"✅ ¡Hola {nombre}! Tu clase de Indoor Cycling está confirmada para el {fecha} a las {hora}. 🚴‍♂️🔥"
-
-    except Exception as e:
-        print(f"❌ Error en Selenium: {e}")
-        return f"❌ Error en Selenium: {str(e)}"
 
 # 📌 Ejecutar FastAPI
 PORT = int(os.environ.get("PORT", 8000))
