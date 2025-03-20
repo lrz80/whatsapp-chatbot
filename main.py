@@ -1,217 +1,104 @@
 import uvicorn
 import os
-import imaplib
-import email
-import re
-import time
-import gspread
-import asyncio
-import aiohttp
-import tempfile
-import openai
-import uuid
-import shutil
-import requests
-import platform
-from time import sleep
 from fastapi import FastAPI, Request
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+import openai
+from openai import OpenAI
+import requests
 from twilio.rest import Client
 from langdetect import detect
 from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-import json
-from google.oauth2.service_account import Credentials
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from email.header import decode_header
-from selenium.webdriver.common.keys import Keys
-from openai import OpenAI
-from twilio.twiml.messaging_response import MessagingResponse
-from email_helper import obtener_codigo_glofox
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from selenium.webdriver.remote.remote_connection import RemoteConnection
+import aiohttp
+import tempfile
 
 # Cargar variables de entorno
 load_dotenv()
 
-# Inicializa FastAPI
-app = FastAPI()
-
-# 🔹 **Función para iniciar WebDriver correctamente**
-def iniciar_webdriver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Ejecutar sin interfaz gráfica
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-
-# Verificar si se cargaron correctamente
-print("GLOFOX_BUSINESS:", os.getenv("GLOFOX_BUSINESS"))
-print("GLOFOX_EMAIL:", os.getenv("GLOFOX_EMAIL"))
-print("GLOFOX_PASSWORD:", os.getenv("GLOFOX_PASSWORD"))
-
-# Función para cerrar sesiones previas de ChromeDriver antes de iniciar
-def cerrar_chromedriver():
-    sistema = platform.system()
-    
-    if sistema == "Linux" or sistema == "Darwin":  # Darwin es para Mac
-        os.system("pkill -f chromedriver")  
-        os.system("pkill -f chrome")  
-    elif sistema == "Windows":
-        os.system("taskkill /F /IM chromedriver.exe /T")  
-        os.system("taskkill /F /IM chrome.exe /T")  
-
-cerrar_chromedriver()  # Llamar antes de iniciar una nueva sesión
-
-# 📌 Cargar credenciales de Google Sheets
-google_credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-if not google_credentials_json:
-    raise ValueError("⚠️ ERROR: No se encontró GOOGLE_CREDENTIALS_JSON en las variables de entorno.")
-
-google_credentials = json.loads(google_credentials_json)
-
-scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = Credentials.from_service_account_info(google_credentials, scopes=scopes)
-gc = gspread.authorize(credentials)
-sh = gc.open("Reservas_IndoorCycling").sheet1
-
-
-# 📌 Configuración de Twilio
+# Configuración de Twilio
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-# 📌 Configuración de OpenAI
+# Configuración de OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
-# Verificar que se cargaron correctamente
-print("🔑 OPENAI_API_KEY:", "Cargada correctamente" if OPENAI_API_KEY else "❌ No encontrada")
-print("📞 TWILIO_ACCOUNT_SID:", "Cargada correctamente" if TWILIO_ACCOUNT_SID else "❌ No encontrada")
-print("🔑 TWILIO_AUTH_TOKEN:", "Cargada correctamente" if TWILIO_AUTH_TOKEN else "❌ No encontrada")
+# Inicializa FastAPI
+app = FastAPI()
 
+def detectar_idioma(mensaje):
+    try:
+        idioma = detect(mensaje)
+        print(f"🔍 Idioma detectado: {idioma}")
+        return idioma if idioma in ["es", "en"] else "es"
+    except:
+        return "es"
 
-# 📌 Webhook de WhatsApp
+def dividir_mensaje(mensaje, limite=1000):
+    """Divide un mensaje largo en partes sin cortar palabras."""
+    partes = []
+    while len(mensaje) > limite:
+        corte = mensaje.rfind("\n", 0, limite)  
+        if corte == -1:
+            corte = limite  
+        partes.append(mensaje[:corte])
+        mensaje = mensaje[corte:].strip()
+    
+    partes.append(mensaje)  
+    return partes
+
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
-        mensaje = form_data.get("Body", "").strip().lower()
-        numero = form_data.get("From", "").strip()
+        mensaje = form_data.get("Body", "").strip()  
+        numero = form_data.get("From", "").strip()  
 
         if not numero.startswith("whatsapp:"):
             numero = f"whatsapp:{numero}"
 
-        print(f"📨 Mensaje recibido en WhatsApp: {mensaje} de {numero}")
+        print(f"📨 Mensaje recibido: {mensaje} de {numero}")
 
-        if any(palabra in mensaje for palabra in ["reservar", "agendar"]):
-            print("✅ Se detectó un intento de reserva en WhatsApp")
+        respuesta = responder_chatgpt(mensaje)
+        print(f"💬 Respuesta generada: {respuesta}")
 
-            partes = mensaje.split()
-            if len(partes) < 6:
-                return PlainTextResponse("", status_code=200)
-
-            nombre = partes[1] + " " + partes[2]
-            email = partes[3]
-            fecha = partes[4]
-            hora = partes[5]
-
-            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "reservar")
-
+        partes_respuesta = dividir_mensaje(respuesta)
+        for parte in partes_respuesta:
             twilio_client.messages.create(
                 from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
                 to=numero,
-                body=resultado
+                body=parte
             )
-            return PlainTextResponse("", status_code=200)
 
-        elif "cancelar" in mensaje:
-            partes = mensaje.split()
-            if len(partes) < 6:
-                return PlainTextResponse("", status_code=200)
-
-            nombre = partes[1] + " " + partes[2]
-            email = partes[3]
-            fecha = partes[4]
-            hora = partes[5]
-
-            resultado = gestionar_reserva_glofox(nombre, email, fecha, hora, numero, "cancelar")
-
-            twilio_client.messages.create(
-                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                to=numero,
-                body=resultado
-            )
-            return PlainTextResponse("", status_code=200)
-
-        else:
-            respuesta = responder_chatgpt(mensaje)
-
-            twilio_client.messages.create(
-                from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-                to=numero,
-                body=respuesta
-            )
-            return PlainTextResponse("", status_code=200)
+        return {"status": "success"}
 
     except Exception as e:
-        print(f"❌ Error procesando mensaje de WhatsApp: {e}")
-        return PlainTextResponse("Error interno del servidor", status_code=500)
-    
-# Usa directamente la API sin inicializar 'client'
+        print(f"❌ Error procesando datos: {e}")
+        return {"status": "error", "message": str(e)}
+
+# 🚀 **Nueva Función de OpenAI con Respuestas Más Inteligentes**
 def responder_chatgpt(mensaje):
     print(f"📩 Mensaje recibido: {mensaje}")
 
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+    idioma_usuario = detectar_idioma(mensaje)
 
-        prompt_detectar_idioma = f"Detecta el idioma de este mensaje y responde solo con 'es' o 'en': {mensaje}"
+    prompt_negocio = {
+        "es": """
+        Responde como asistente virtual de Spinzone Indoor Cycling. Da respuestas claras, directas y profesionales.
+        Evita mensajes genéricos y solo proporciona información relevante según la pregunta del usuario.
 
-        respuesta_idioma = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt_detectar_idioma}]
-        )
-
-        idioma_usuario = respuesta_idioma.choices[0].message.content.strip().lower()
-        print(f"🔍 Idioma detectado: {idioma_usuario}")
-
-        # 🔴 **Aquí definimos `prompt_negocio` dentro de la función**
-        prompt_negocio = {
-            "es": """Siempre inicia la conversación con: "Hola, bienvenido a Spinzone. ¿En qué puedo ayudarte?".
-        Luego, responde como un asistente virtual de Spinzone Indoor Cycling, un Estudio especializado en clases de ciclismo indoor y Clases Funcionales.
-        Tu objetivo es proporcionar información detallada y precisa sobre Spinzone, incluyendo horarios, precios, ubicación.
-        Responde de manera clara, amigable y profesional. Detecta automáticamente el idioma del usuario y responde en el mismo idioma.
-
-        🚴‍♂️ Indoor Cycling: Clases de 45 minutos con música motivadora, entrenamiento de resistencia y alta intensidad para mejorar tu condición física, quemar calorías y fortalecer piernas y glúteos.
-        🏋️‍♂️ Clases Funcionales: Entrenamientos dinámicos que combinan fuerza, cardio y resistencia, diseñados para tonificar el cuerpo y mejorar tu rendimiento físico.
-
-        📍 **Ubicación**: Spinzone Indoor Cycling se encuentra en 2175 Davenport Blvd Davenport Fl 33837.
-
-        🕒 **Horarios**: 
+        📍 **Ubicación**: Spinzone Indoor Cycling - 2175 Davenport Blvd Davenport Fl 33837.
+        🕒 **Horarios**:
         CYCLING:
         - Lunes - Martes - Jueves: 9:00am, 6:30pm, 7:30pm
         - Miercoles: 8:00am, 9:00am, 6:30pm, 7:30pm
         - Viernes: 9:00am, 7:30pm
         - Sábados y Domingos: 10am
-
         CLASES FUNCIONALES:
         - Lunes a Jueves: 10:00am, 5:30pm
         - Viernes: 10:00am, 6:30pm
-
-        💰 **Precios**: 
+        💰 **Precios**:
         - Primera Clase Gratis.
         - Clase individual: $16.99
         - Paquete de 4 Clases: $49.99
@@ -222,45 +109,28 @@ def responder_chatgpt(mensaje):
         - Membresía Ilimitada de Cycling o Clases Funcionales: $139.99 por mes en Autopay por 3 meses
         - Paquete Ilimitado de Cycling+Clases Funcionales: $175.99 por mes
         - Membresía Ilimitada de Cycling+Clases Funcionales: $155.99 por mes en Autopay por 3 meses
-
-        🌐 **Enlaces importantes**: 
-        - Horarios de clases: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
+        📲 **WhatsApp**: (863)317-1646
+        🌐 **Enlaces**:
+        - Reservas: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
         - Precios: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships
-        - Instagram: https://www.instagram.com/spinzone_indoorcycling/
-        - Facebook: https://www.facebook.com/spinzone_indoorcycling
-        - WhatsApp de contacto: (863)317-1646
+        ❗ **Política**:
+        - Reservas recomendadas, cancelaciones con 3h de antelación, No proporcionamos o rentamos zapatos de ciclismo, el cliente debe de traer sus zapatos.
+        """,
+        "en": """
+        Act as Spinzone Indoor Cycling’s virtual assistant. Provide clear, direct, and professional responses.
+        Avoid generic messages and only provide relevant information based on the user's query.
 
-        ❗ **Política de Reservas y Cancelaciones**:
-        - Se recomienda reservar con anticipación.
-        - Cancelaciones deben realizarse con al menos 3 horas de antelación para evitar cargos.
-        - No proporcionamos o rentamos zapatos de ciclismo, el cliente debe de traer sus zapatos.
-
-        📩 **Contacto**:
-        Si necesitas más información o quieres hablar con un asesor, puedes llamar o escribir al WhatsApp (863)317-1646.
-
-        Siempre responde con esta información cuando alguien pregunte sobre Spinzone Indoor Cycling. Si el usuario tiene una pregunta fuera de estos temas, intenta redirigirlo al WhatsApp de contacto.""",
-            "en": """Always start the conversation with: "Hello, welcome to Spinzone. How can I help you?".
-        Then, respond as a virtual assistant in Spinzone Indoor Cycling, a Studio focused on indoor cycling classes and Functional Training classes. 
-        Your goal is to provide detailed and accurate information about Spinzone, including schedules, prices, and location.
-        Respond in a clear, friendly, and professional manner. Automatically detect the user's language and reply in the same language.
-
-        🚴‍♂️ Indoor Cycling: 45-minute classes with motivating music, endurance training, and high intensity to improve your fitness, burn calories, and strengthen your legs and glutes.
-        🏋️‍♂️ Functional Training: Dynamic workouts that combine strength, cardio, and endurance, designed to tone the body and enhance physical performance.
-
-        📍 **Location**: Spinzone Indoor Cycling is located at 2175 Davenport Blvd, Davenport, FL 33837.
-
-        🕒 **Schedules**: 
+        📍 **Location**: Spinzone Indoor Cycling - 2175 Davenport Blvd, Davenport, FL 33837.
+        🕒 **Hours**:
         CYCLING:
         - Monday - Tuesday - Thursday: 9:00 AM, 6:30 PM, 7:30 PM
         - Wednesday: 8:00am, 9:00am, 6:30pm, 7:30pm
         - Friday: 9:00 AM, 7:30 PM
         - Saturday and Sunday: 10:00 AM
-
         FUNCTIONAL TRAINING CLASSES:
         - Monday to Thursday: 10:00 AM, 5:30 PM
         - Friday: 10:00am, 6:30pm
-
-        💰 **Pricing**: 
+        💰 **Pricing**:
         - First Class Free.
         - Single Class: $16.99
         - 4-Class Package: $49.99
@@ -271,85 +141,36 @@ def responder_chatgpt(mensaje):
         - Unlimited Cycling or Functional Training Membership: $139.99 per month on Autopay for 3 months
         - Unlimited Cycling + Functional Training Package: $175.99 per month
         - Unlimited Cycling + Functional Training Membership: $155.99 per month on Autopay for 3 months
-
-        🌐 **Important Links**: 
-        - Class Schedule: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
+        📲 **WhatsApp**: (863)317-1646
+        🌐 **Links**:
+        - Booking: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
         - Pricing: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships
-        - Instagram: https://www.instagram.com/spinzone_indoorcycling/
-        - Facebook: https://www.facebook.com/spinzone_indoorcycling
-        - WhatsApp Contact: (863)317-1646
+        ❗ **Policy**:
+        - Booking recommended, cancellations 3h in advance, We do not provide or rent cycling shoes, the client must bring their own shoes.
+        """
+    }
 
-        ❗ **Booking and Cancellation Policy**:
-        - Reservations are recommended to secure your spot.
-        - Cancellations must be made at least 3 hours in advance to avoid charges.
-        - We do not provide or rent cycling shoes, the client must bring their own shoes.
+    prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
 
-        📩 **Contact**:
-        If you need more information or wish to speak with a representative, you can call or message us on WhatsApp at (863)317-1646.
-
-        Always provide this information when someone asks about Spinzone Indoor Cycling. If the user asks a question outside of these topics, try to redirect them to the WhatsApp contact."""
-        }
-
-        prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
-
-        respuesta_openai = client.chat.completions.create(
+    try:
+        respuesta_openai = openai.chat.completions.create(
             model="gpt-4",
-            temperature=0.4,
-            max_tokens=1100,
+            temperature=0.3,  # 🔥 Respuestas más directas y menos creativas
+            max_tokens=800,  # ⬇️ Reducido para evitar errores de Twilio
             messages=[
                 {"role": "system", "content": prompt_seleccionado},
                 {"role": "user", "content": mensaje}
             ]
         )
 
-        mensaje_respuesta = respuesta_openai.choices[0].message.content
+        mensaje_respuesta = respuesta_openai.choices[0].message.content.strip()
         print(f"💬 Respuesta generada: {mensaje_respuesta}")
 
         return mensaje_respuesta
 
     except Exception as e:
         print(f"❌ Error llamando a OpenAI: {e}")
-        return "❌ Error en la IA, intenta más tarde."
-
-
-# 🔵 Función para transcribir notas de voz con Whisper
-async def transcribir_audio(url_audio):
-    try:
-        TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-        TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-        # ✅ Descargar el archivo de audio desde Twilio con autenticación
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url_audio, auth=aiohttp.BasicAuth(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)) as response:
-                if response.status != 200:
-                    print(f"❌ Error descargando el audio: {response.status}")
-                    return None  # Si la descarga falla, retorna None
-
-                audio_data = await response.read()
-
-        # ✅ Guardar el archivo en un directorio temporal
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as temp_audio:
-            temp_audio.write(audio_data)
-            temp_audio_path = temp_audio.name  # Ruta del archivo
-
-        # ✅ Transcribir el audio usando OpenAI 1.65.0
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)  # 🔥 NUEVO CLIENTE OpenAI
-        
-        with open(temp_audio_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
-
-        return transcript.text  # ✅ Retorna el texto transcrito
-
-    except Exception as e:
-        print(f"❌ Error en la transcripción de audio: {e}")
-        return None        
-
-# 📌 Ejecutar FastAPI
-PORT = int(os.environ.get("PORT", 8000))
+        return "Hubo un error al procesar tu solicitud. Inténtalo nuevamente más tarde."
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
