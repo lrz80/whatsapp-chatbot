@@ -113,6 +113,7 @@ def responder_chatgpt(mensaje):
         🌐 **Enlaces**:
         - Reservas: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
         - Precios: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships
+        - Para obtener la Clase Gratis: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships/64bd9335561ca2443a00eb16/plan/1690145417424/buy
         ❗ **Política**:
         - Reservas recomendadas, cancelaciones con 3h de antelación, No proporcionamos o rentamos zapatos de ciclismo, el cliente debe de traer sus zapatos.
         """,
@@ -145,6 +146,7 @@ def responder_chatgpt(mensaje):
         🌐 **Links**:
         - Booking: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/classes-day-view
         - Pricing: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships
+        - To get the Free Class: https://app.glofox.com/portal/#/branch/6499ecc2ba29ef91ae07e461/memberships/64bd9335561ca2443a00eb16/plan/1690145417424/buy
         ❗ **Policy**:
         - Booking recommended, cancellations 3h in advance, We do not provide or rent cycling shoes, the client must bring their own shoes.
         """
