@@ -5,10 +5,12 @@ import openai
 from openai import OpenAI
 import requests
 from twilio.rest import Client
-from langdetect import detect
+from langdetect import detect, detect_langs
 from dotenv import load_dotenv
 import aiohttp
 import tempfile
+import re
+from typing import Optional
 
 # Cargar variables de entorno
 load_dotenv()
@@ -27,40 +29,118 @@ openai.api_key = OPENAI_API_KEY
 # Inicializa FastAPI
 app = FastAPI()
 
-def detectar_idioma(mensaje):
-    try:
-        idioma = detect(mensaje)
-        print(f"🔍 Idioma detectado: {idioma}")
-        return idioma if idioma in ["es", "en"] else "es"
-    except:
+# === NUEVO: memoria simple de idioma por usuario ===
+LAST_LANG_BY_NUMBER: dict[str, str] = {}  # e.g., {"whatsapp:+1xxxx": "en"}
+
+# === NUEVO: normalizador del número (asegura prefijo whatsapp:) ===
+def normalize_wa(from_value: str) -> str:
+    if not from_value:
+        return ""
+    from_value = from_value.strip()
+    return from_value if from_value.startswith("whatsapp:") else f"whatsapp:{from_value}"
+
+# === NUEVO: heurística de override por intención explícita del usuario ===
+def explicit_lang_override(text: str) -> Optional[str]:
+    t = text.lower().strip()
+
+    # Inglés explícito
+    if re.search(r"\b(english please|in english|english)\b", t):
+        return "en"
+
+    # Español explícito
+    if re.search(r"\b(en español|spanish please|español|habla español)\b", t):
         return "es"
+
+    return None
+
+# === NUEVO: detección segura con fallback por historial, longitud y palabras clave ===
+def detectar_idioma_seguro(mensaje: str, numero: str) -> str:
+    # 1) Si el usuario lo pidió explícito, respetar
+    override = explicit_lang_override(mensaje)
+    if override in ("es", "en"):
+        LAST_LANG_BY_NUMBER[numero] = override
+        print(f"🔄 Override de idioma por solicitud explícita: {override}")
+        return override
+
+    # 2) Si ya tenemos idioma previo “confiable” para este número, úsalo para mensajes muy cortos
+    palabras = mensaje.strip().split()
+    last = LAST_LANG_BY_NUMBER.get(numero)
+
+    # Algunas palabras cortas que confunden a langdetect (e.g., "cycling" -> "cy")
+    # Si el texto es corto o es una palabra típica, heredar idioma previo (si existe)
+    palabras_conflictivas = {"cycling", "hola", "hello", "ok", "thanks", "gracias", "schedule"}
+    if len(palabras) <= 2 or mensaje.lower().strip() in palabras_conflictivas:
+        if last in ("es", "en"):
+            print(f"🛟 Fallback por mensaje corto/palabra conflictiva → usando idioma previo: {last}")
+            return last
+
+    # 3) Detección probabilística (detect_langs) y reglas para ‘cy’
+    try:
+        langs = detect_langs(mensaje)
+        # langs es una lista como [en:0.99, es:0.01]
+        # Tomar el top-1
+        top = sorted(langs, key=lambda x: x.prob, reverse=True)[0]
+        cand = top.lang
+        prob = top.prob
+        print(f"🔍 detect_langs → {[(str(l.lang), float(l.prob)) for l in langs]} | top={cand} p={prob:.2f}")
+
+        # Si detecta 'cy' para algo como "cycling", mapear a en (muy común)
+        if cand == "cy":
+            cand = "en"
+
+        # Si el candidato no es es/en, elegir el último si existe; si no, heurística por caracteres
+        if cand not in ("es", "en"):
+            if last in ("es", "en"):
+                print(f"🛟 cand {cand} no válido; usando last={last}")
+                return last
+            # Heurística por tildes/ñ → español
+            if re.search(r"[áéíóúñü]", mensaje.lower()):
+                cand = "es"
+            else:
+                cand = "en"
+
+        # Pequeña confianza: si prob baja (<0.70) y hay last, preferir last
+        if prob < 0.70 and last in ("es", "en"):
+            print(f"🛟 prob baja ({prob:.2f}); usando last={last}")
+            cand = last
+
+        LAST_LANG_BY_NUMBER[numero] = cand
+        return cand
+
+    except Exception as e:
+        print(f"⚠️ Error en detect_langs: {e}")
+        # Fallback: usar last si hay, si no, inglés por defecto
+        if last in ("es", "en"):
+            return last
+        return "en"
 
 def dividir_mensaje(mensaje, limite=1000):
     """Divide un mensaje largo en partes sin cortar palabras."""
     partes = []
     while len(mensaje) > limite:
-        corte = mensaje.rfind("\n", 0, limite)  
+        corte = mensaje.rfind("\n", 0, limite)
         if corte == -1:
-            corte = limite  
+            corte = limite
         partes.append(mensaje[:corte])
         mensaje = mensaje[corte:].strip()
-    
-    partes.append(mensaje)  
+    partes.append(mensaje)
     return partes
 
 @app.post("/whatsapp")
 async def whatsapp_webhook(request: Request):
     try:
         form_data = await request.form()
-        mensaje = form_data.get("Body", "").strip()  
-        numero = form_data.get("From", "").strip()  
-
-        if not numero.startswith("whatsapp:"):
-            numero = f"whatsapp:{numero}"
+        mensaje = form_data.get("Body", "").strip()
+        numero_raw = form_data.get("From", "").strip()
+        numero = normalize_wa(numero_raw)
 
         print(f"📨 Mensaje recibido: {mensaje} de {numero}")
 
-        respuesta = responder_chatgpt(mensaje)
+        # === NUEVO: idioma seguro usando historial + heurísticas
+        idioma_usuario = detectar_idioma_seguro(mensaje, numero)
+        print(f"🔤 Idioma efectivo para responder: {idioma_usuario}")
+
+        respuesta = responder_chatgpt(mensaje, idioma_usuario)  # ← pasamos idioma
         print(f"💬 Respuesta generada: {respuesta}")
 
         partes_respuesta = dividir_mensaje(respuesta)
@@ -77,14 +157,12 @@ async def whatsapp_webhook(request: Request):
         print(f"❌ Error procesando datos: {e}")
         return {"status": "error", "message": str(e)}
 
-# 🚀 **Nueva Función de OpenAI con Respuestas Más Inteligentes**
-def responder_chatgpt(mensaje):
+# 🚀 Respuestas con OpenAI (con idioma forzado/efectivo)
+def responder_chatgpt(mensaje: str, idioma_efectivo: str = "en"):
     print(f"📩 Mensaje recibido: {mensaje}")
 
-    idioma_usuario = detectar_idioma(mensaje)
-
     prompt_negocio = {
-    "es": """
+        "es": """
     Responde como asistente virtual de Synergy Zone (Spinzone). Da respuestas claras, directas y profesionales.
     Evita mensajes genéricos y solo proporciona información relevante según la pregunta del usuario.
 
@@ -96,7 +174,7 @@ def responder_chatgpt(mensaje):
     - Sábados y Domingos: 10:00am
     CLASES FUNCIONALES:
     - Lunes a Jueves: 7:00am, 8:15am, 10:00am, 5:30pm, 6:30pm
-    - Viernes: 7:00am, 8:15am, 10:00am, 5:30pm
+    - Viernes: 7:00am, 8:15am, 5:30pm
     💰 **Precios**:
     - Primera Clase Gratis.
     - Clase individual: $19.99
@@ -161,7 +239,7 @@ def responder_chatgpt(mensaje):
     """,
         "en": """
     Reply as the virtual assistant for Synergy Zone (Spinzone). Keep answers clear, direct, and professional.
-    Avoid generic messages and provide only information relevant to the users question.
+    Avoid generic messages and provide only information relevant to the user's question.
 
     📍 **Location**: Synergy Zone - 2175 Davenport Blvd, Davenport, FL 33837.
     🕒 **Schedule**:
@@ -236,13 +314,14 @@ def responder_chatgpt(mensaje):
     """
     }
 
-    prompt_seleccionado = prompt_negocio.get(idioma_usuario, prompt_negocio["es"])
+    # Elegir prompt por idioma ya decidido
+    prompt_seleccionado = prompt_negocio["en" if idioma_efectivo == "en" else "es"]
 
     try:
         respuesta_openai = openai.chat.completions.create(
             model="gpt-4",
-            temperature=0.3,  # 🔥 Respuestas más directas y menos creativas
-            max_tokens=800,  # ⬇️ Reducido para evitar errores de Twilio
+            temperature=0.3,      # Respuestas más directas
+            max_tokens=800,       # Evita superar límites de Twilio
             messages=[
                 {"role": "system", "content": prompt_seleccionado},
                 {"role": "user", "content": mensaje}
@@ -251,7 +330,6 @@ def responder_chatgpt(mensaje):
 
         mensaje_respuesta = respuesta_openai.choices[0].message.content.strip()
         print(f"💬 Respuesta generada: {mensaje_respuesta}")
-
         return mensaje_respuesta
 
     except Exception as e:
