@@ -184,7 +184,7 @@ def responder_chatgpt(mensaje: str, idioma_efectivo: str = "en"):
     - Plan Bronze Ilimitado de Cycling o Clases Funcionales: $169.99 al mes o $149.99 al mes en Autopay durante 3 meses.
     - Plan Gold Ilimitado de Clases de Cycling y Clases Funcionales + 5% de descuento en tienda: $185.99 al mes o $165.99 al mes en Autopay durante 3 meses.
     - Plan Platinum Ilimitado de Clases de Cycling y Clases Funcionales + 8 Recovery Session (sauna + cold plunge) + 10% de decuento en tienda: $219.99 al mes o $199.99 al mes en autopay durante 3 meses.
-    - Plan VIP Full Access (Cupos Limitados): Clases ilimitadas de Cycling y Funcionales + Recovery Session (Sauna + cold plunge) + Kit de Bienvenida + Clase Privada de Cumpleanos $319.99 al mes o $299.99 al mes en Autopay durante 3 meses.
+    - Plan VIP Full Access (Cupos Limitados): Clases ilimitadas de Cycling y Funcionales + Recovery Session (Sauna + cold plunge) + Kit de Bienvenida + Clase Privada de Cumpleanos $299.99 al mes en Autopay durante 3 meses.
     - Sesion de Sauna (30 Minutos): $14.99
     📲 **Soporte**: https://wa.me/18633171646.
     🌐 **Enlaces**:
@@ -259,7 +259,7 @@ def responder_chatgpt(mensaje: str, idioma_efectivo: str = "en"):
     - Bronze Unlimited (Cycling or Functional): $169.99/mo or $149.99/mo on Autopay for 3 months.
     - Gold Unlimited (Cycling + Functional) + 5% in-store discount: $185.99/mo or $165.99/mo on Autopay for 3 months.
     - Platinum Unlimited (Cycling + Functional) + 8 Recovery Sessions (sauna + cold plunge) + 10% in-store discount: $219.99/mo or $199.99/mo on Autopay for 3 months.
-    - VIP Full Access (Limited spots): Unlimited Cycling & Functional + Recovery Session (Sauna + Cold Plunge) + Welcome Kit + Private Birthday Class: $319.99/mo or $299.99/mo on Autopay for 3 months.
+    - VIP Full Access (Limited spots): Unlimited Cycling & Functional + Recovery Session (Sauna + Cold Plunge) + Welcome Kit + Private Birthday Class: $299.99/mo on Autopay for 3 months.
     - Sauna session (30 minutes): $14.99
     📲 **Support**: https://wa.me/18633171646
     🌐 **Links**:
